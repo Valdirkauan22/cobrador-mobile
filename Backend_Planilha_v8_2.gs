@@ -1,6 +1,4 @@
-const ID = '199wvnwyG6tojUhXrIYvX_eXaBoFZ5lBp2YqR0SYG-KU',
-  CHAVE = '1478523617kauan',
-  FUSO = 'America/Sao_Paulo',
+const FUSO = 'America/Sao_Paulo',
   ABA_MENSALIDADES = 'Mensalidades',
   ABA_HISTORICO = 'Histórico Cobranças',
   ABA_MORADORES = 'Moradores',
@@ -11,7 +9,24 @@ function out(o) {
 }
 
 function ok(c) {
-  if (!c || c !== CHAVE) throw Error('Chave inválida');
+  let chave = PropertiesService.getScriptProperties().getProperty('API_KEY');
+  if (!chave) throw Error('API_KEY não configurada nas propriedades do script.');
+  if (!c || c !== chave) throw Error('Chave inválida');
+}
+
+function planilhaId_() {
+  let id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  if (!id) throw Error('SPREADSHEET_ID não configurado nas propriedades do script.');
+  return id;
+}
+
+function operacaoJaProcessada_(h, id) {
+  id = String(id || '').trim();
+  if (!id || !h || h.getLastRow() < 4) return false;
+  let u = h.getLastRow(), ini = Math.max(4, u - 499), marcador = '[op:' + id + ']';
+  return h.getRange(ini, 8, u - ini + 1, 1).getDisplayValues().some(function(r) {
+    return String(r[0] || '').indexOf(marcador) >= 0;
+  });
 }
 
 function brl(v) {
@@ -79,12 +94,12 @@ function doPost(e) {
 }
 
 function health_() {
-  let s = SpreadsheetApp.openById(ID);
+  let s = SpreadsheetApp.openById(planilhaId_());
   return { ok: true, versao: '8.2', planilha: s.getName(), timestamp: dh(new Date()) };
 }
 
 function contextoAtual_() {
-  let ss = SpreadsheetApp.openById(ID), s = ss.getSheetByName(ABA_MENSALIDADES);
+  let ss = SpreadsheetApp.openById(planilhaId_()), s = ss.getSheetByName(ABA_MENSALIDADES);
   if (!s) throw Error('Aba Mensalidades não encontrada');
   let u = s.getLastRow();
   if (u < 4) return { ss: ss, sheet: s, dados: [] };
@@ -261,7 +276,7 @@ function consulta_() {
 }
 
 function historico_(codigo) {
-  let ss = SpreadsheetApp.openById(ID), h = ss.getSheetByName(ABA_HISTORICO), z = [];
+  let ss = SpreadsheetApp.openById(planilhaId_()), h = ss.getSheetByName(ABA_HISTORICO), z = [];
   if (!h || h.getLastRow() < 4) return { ok: true, historico: z };
   let u = h.getLastRow(), ini = Math.max(4, u - 499);
   h.getRange(ini, 1, u - ini + 1, 8).getValues().forEach(function(r) {
@@ -285,23 +300,24 @@ function registrarPagamento_(p) {
   let lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    let x = contextoAtual_(), cod = String(p.codigo || ''), valor = Number(p.valor || 0), forma = forma_(p.forma), data = data_(p.data), obs = String(p.observacao || '').trim();
+    let x = contextoAtual_(), cod = String(p.codigo || ''), valor = Number(p.valor || 0), forma = forma_(p.forma), data = data_(p.data), obs = String(p.observacao || '').trim(), op = String(p.operacao_id || '').trim();
     if (!cod) throw Error('Morador inválido.');
     if (!(valor > 0)) throw Error('O valor deve ser maior que zero.');
     if (!forma) throw Error('Forma de pagamento inválida.');
     let i = x.dados.find(function(a) { return String(a.row[2]) === cod; });
     if (!i) throw Error('Morador não encontrado na competência atual.');
-    let r = i.row, saldo = Number(r[10] || 0), pago = Number(r[9] || 0);
+    let r = i.row, saldo = Number(r[10] || 0), pago = Number(r[9] || 0), h = x.ss.getSheetByName(ABA_HISTORICO);
+    if (!h) throw Error('Aba Histórico Cobranças não encontrada.');
+    if (op && operacaoJaProcessada_(h, op)) return { ok: true, duplicado: true, status: saldo <= 0 ? 'PAGO' : 'PARCIAL' };
     if (saldo <= 0) throw Error('Esta mensalidade já está paga.');
     if (valor > saldo + .001) throw Error('Valor maior que o saldo de ' + brl(saldo) + '.');
-    let novo = pago + valor, resta = Math.max(0, saldo - valor), quitado = resta < .01, h = x.ss.getSheetByName(ABA_HISTORICO);
-    if (!h) throw Error('Aba Histórico Cobranças não encontrada.');
+    let novo = pago + valor, resta = Math.max(0, saldo - valor), quitado = resta < .01;
     x.sheet.getRange(i.linha, 10).setValue(novo);
     x.sheet.getRange(i.linha, 12).setValue(data);
     x.sheet.getRange(i.linha, 22).setValue(quitado ? 'ENVIADO' : 'AGUARDANDO');
     x.sheet.getRange(i.linha, 25).clearContent();
     if (quitado) x.sheet.getRange(i.linha, 21).setValue(forma);
-    let texto = 'Pagamento de ' + brl(valor) + ' em ' + dt(data) + ' via ' + forma + (obs ? ' — ' + obs : '');
+    let texto = 'Pagamento de ' + brl(valor) + ' em ' + dt(data) + ' via ' + forma + (obs ? ' — ' + obs : '') + (op ? ' [op:' + op + ']' : '');
     let atual = String(r[19] || '').trim();
     x.sheet.getRange(i.linha, 20).setValue(atual ? atual + '\n' + texto : texto);
     h.appendRow([new Date(), r[2], r[3], r[1], 'PAGAMENTO', forma, quitado ? 'PAGO' : 'PARCIAL', texto]);
@@ -317,7 +333,7 @@ function marcar_(p) {
   let lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    let ss = SpreadsheetApp.openById(ID), s = ss.getSheetByName(ABA_MENSALIDADES), h = ss.getSheetByName(ABA_HISTORICO), l = Number(p.linha);
+    let ss = SpreadsheetApp.openById(planilhaId_()), s = ss.getSheetByName(ABA_MENSALIDADES), h = ss.getSheetByName(ABA_HISTORICO), l = Number(p.linha);
     if (!s || !h) throw Error('Abas obrigatórias não encontradas');
     if (!l || l < 4) throw Error('Linha inválida');
     let r = s.getRange(l, 1, 1, 25).getValues()[0], z = String(p.resultado || '').trim().toUpperCase(), ag = new Date(), a = String(r[13] || '').trim(), hist = enviadosHoje(ss);
@@ -374,16 +390,16 @@ function salvarTemplates_(p) {
 }
 
 function moradores_() {
-  let s = SpreadsheetApp.openById(ID).getSheetByName(ABA_MORADORES), z = [];
+  let s = SpreadsheetApp.openById(planilhaId_()).getSheetByName(ABA_MORADORES), z = [];
   if (!s) throw Error('Aba Moradores não encontrada');
   if (s.getLastRow() < 4) return { ok: true, moradores: z };
-  s.getRange(4, 1, s.getLastRow() - 3, 4).getValues().forEach(function(r, i) {
+  s.getRange(4, 1, s.getLastRow() - 3, 5).getValues().forEach(function(r, i) {
     let cod = String(r[0] || '').trim();
     let nome = String(r[1] || '').trim();
     let tel = String(r[2] || '').trim();
     let sit = String(r[3] || 'Ativo').trim();
     if (nome) {
-      z.push({ linha: i + 4, codigo: cod, nome: nome, telefone: tel, situacao: sit });
+      z.push({ linha: i + 4, codigo: cod, nome: nome, telefone: tel, situacao: sit, unidade: String(r[4] || '').trim() });
     }
   });
   return { ok: true, moradores: z };
@@ -393,9 +409,9 @@ function salvarMorador_(p) {
   let lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    let s = SpreadsheetApp.openById(ID).getSheetByName(ABA_MORADORES);
+    let s = SpreadsheetApp.openById(planilhaId_()).getSheetByName(ABA_MORADORES);
     if (!s) throw Error('Aba Moradores não encontrada');
-    let cod = String(p.codigo || '').trim(), nome = String(p.nome || '').trim(), tel = String(p.telefone || '').trim(), sit = String(p.situacao || 'Ativo').trim();
+    let cod = String(p.codigo || '').trim(), nome = String(p.nome || '').trim(), tel = String(p.telefone || '').trim(), sit = String(p.situacao || 'Ativo').trim(), unidade = String(p.unidade || '').trim();
     if (!nome || !tel) throw Error('Informe nome e telefone.');
     let linha = Number(p.linha || 0);
     if (!linha) {
@@ -404,7 +420,7 @@ function salvarMorador_(p) {
       cod = cod || String(maior + 1);
       linha = Math.max(4, s.getLastRow() + 1);
     }
-    s.getRange(linha, 1, 1, 4).setValues([[cod, nome, tel, sit]]);
+    s.getRange(linha, 1, 1, 5).setValues([[cod, nome, tel, sit, unidade]]);
     SpreadsheetApp.flush();
     limpa();
     return { ok: true, linha: linha, codigo: cod };
@@ -415,7 +431,7 @@ function salvarMorador_(p) {
 
 function anual_(ano) {
   ano = Number(ano || Utilities.formatDate(new Date(), FUSO, 'yyyy'));
-  let s = SpreadsheetApp.openById(ID).getSheetByName(ABA_MENSALIDADES), meses = [];
+  let s = SpreadsheetApp.openById(planilhaId_()).getSheetByName(ABA_MENSALIDADES), meses = [];
   for (let m = 1; m <= 12; m++) meses.push({ mes: m, competencia: (m < 10 ? '0' : '') + m + '/' + ano, previsto: 0, pago: 0, pendente: 0, qtd_pagos: 0, qtd_pendentes: 0 });
   if (!s || s.getLastRow() < 4) return { ok: true, ano: ano, meses: meses };
   s.getRange(4, 1, s.getLastRow() - 3, 25).getValues().forEach(function(r) {
@@ -436,7 +452,7 @@ function anual_(ano) {
 }
 
 function backupAgora_() {
-  let arq = DriveApp.getFileById(ID), nome = 'Backup_Associacao_' + Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd_HH-mm');
+  let arq = DriveApp.getFileById(planilhaId_()), nome = 'Backup_Associacao_' + Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd_HH-mm');
   let copia = arq.makeCopy(nome);
   return { ok: true, nome: copia.getName(), url: copia.getUrl() };
 }
@@ -452,19 +468,31 @@ function ativarBackup_() {
 }
 
 function anexarComprovante_(p) {
-  let ss = SpreadsheetApp.openById(ID), h = ss.getSheetByName(ABA_HISTORICO), cod = String(p.codigo || ''), nome = String(p.morador || ''), arquivo = String(p.arquivo || '').trim(), obs = String(p.observacao || '').trim();
+  let ss = SpreadsheetApp.openById(planilhaId_()), h = ss.getSheetByName(ABA_HISTORICO), cod = String(p.codigo || ''), nome = String(p.morador || ''), arquivo = String(p.arquivo || '').trim(), obs = String(p.observacao || '').trim(), op = String(p.operacao_id || '').trim();
   if (!h) throw Error('Aba Histórico Cobranças não encontrada.');
   if (!cod || !arquivo) throw Error('Morador ou arquivo inválido.');
+  if (op && operacaoJaProcessada_(h, op)) return { ok: true, duplicado: true };
+  let urlArquivo = '';
+  if (p.arquivo_base64) {
+    let dados = String(p.arquivo_base64).replace(/^data:[^;]+;base64,/, '');
+    if (dados.length > 10000000) throw Error('Comprovante muito grande. Limite aproximado: 7 MB.');
+    let bytes = Utilities.base64Decode(dados), mime = String(p.mime_type || 'application/octet-stream');
+    let pastas = DriveApp.getFoldersByName('Comprovantes Associação');
+    let pasta = pastas.hasNext() ? pastas.next() : DriveApp.createFolder('Comprovantes Associação');
+    let nomeSeguro = Utilities.formatDate(new Date(), FUSO, 'yyyyMMdd_HHmmss') + '_' + cod + '_' + arquivo.replace(/[^a-zA-Z0-9._-]/g, '_');
+    let criado = pasta.createFile(Utilities.newBlob(bytes, mime, nomeSeguro));
+    urlArquivo = criado.getUrl();
+  }
   let comp = new Date();
   try {
     let x = contextoAtual_(), i = x.dados.find(function(a) { return String(a.row[2]) === cod; });
     if (i) {
       comp = i.row[1];
-      let atual = String(i.row[19] || '').trim(), texto = 'Comprovante anexado: ' + arquivo + (obs ? ' — ' + obs : '');
+      let atual = String(i.row[19] || '').trim(), texto = 'Comprovante anexado: ' + arquivo + (urlArquivo ? ' — ' + urlArquivo : '') + (obs ? ' — ' + obs : '');
       x.sheet.getRange(i.linha, 20).setValue(atual ? atual + '\n' + texto : texto);
     }
   } catch (e) {}
-  h.appendRow([new Date(), cod, nome, comp, 'COMPROVANTE', 'Arquivo local', 'ANEXADO', 'Comprovante: ' + arquivo + (obs ? ' — ' + obs : '')]);
+  h.appendRow([new Date(), cod, nome, comp, 'COMPROVANTE', urlArquivo ? 'Google Drive' : 'Arquivo local', 'ANEXADO', 'Comprovante: ' + arquivo + (urlArquivo ? ' — ' + urlArquivo : '') + (obs ? ' — ' + obs : '') + (op ? ' [op:' + op + ']' : '')]);
   SpreadsheetApp.flush();
-  return { ok: true };
+  return { ok: true, url: urlArquivo };
 }

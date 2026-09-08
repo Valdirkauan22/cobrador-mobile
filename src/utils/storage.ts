@@ -4,7 +4,8 @@ const STORAGE_KEY = 'cobradorCfg';
 const OFFLINE_QUEUE_KEY = 'cobradorOfflineQueue';
 export const DEFAULT_URL =
   'https://script.google.com/macros/s/AKfycbx4Hm5Nh2J8HeEhctvlRBdKKFDy-QY3miBFz1qZxq_QEHEleF-skUIhfceUL4k8bPxEdg/exec';
-export const DEFAULT_KEY = '1478523617kauan';
+// A chave deve ser informada pelo usuário e nunca publicada no repositório.
+export const DEFAULT_KEY = '';
 
 export function loadConfig(): AppConfig {
   try {

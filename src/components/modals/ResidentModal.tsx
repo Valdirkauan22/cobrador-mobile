@@ -152,7 +152,7 @@ export const ResidentModal: React.FC<ResidentModalProps> = ({
             required
             value={telefone}
             onChange={(e) => setTelefone(e.target.value)}
-            placeholder="Ex: 11987654321"
+            placeholder="Ex: DDD + número do celular"
             className="w-full bg-[#fbfdff] border border-[#cad5e1] rounded-xl p-3 text-[#172033] outline-none focus:border-[#1769aa]"
           />
         </div>

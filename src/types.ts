@@ -69,10 +69,10 @@ export interface AppConfig {
 
 export interface OfflineAction {
   id: string;
-  type: 'pagamento' | 'marcar' | 'morador';
+  type: 'pagamento' | 'marcar' | 'morador' | 'comprovante';
   payload: any;
   timestamp: number;
-  descricao: string;
+  descricao?: string;
 }
 
 export interface DashboardData {

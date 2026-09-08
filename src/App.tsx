@@ -78,6 +78,12 @@ export const App: React.FC = () => {
   const [isAnnualOpen, setIsAnnualOpen] = useState<boolean>(false);
 
   const api = useMemo(() => new CobradorApi(config), [config]);
+  const newOperationId = () =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `op-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const isNetworkFailure = (err: unknown) =>
+    !navigator.onLine || err instanceof TypeError || /network|fetch|conexão/i.test(String((err as any)?.message || err));
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -194,8 +200,9 @@ export const App: React.FC = () => {
     if (!paymentItem) return;
 
     let obs = data.observacao;
+    let proof: Awaited<ReturnType<typeof saveProofAttachment>> | null = null;
     if (data.file) {
-      await saveProofAttachment(paymentItem.codigo, paymentItem.morador, data.file, data.observacao);
+      proof = await saveProofAttachment(paymentItem.codigo, paymentItem.morador, data.file, data.observacao);
       obs += (obs ? ' — ' : '') + 'Comprovante: ' + data.file.name;
     }
 
@@ -206,22 +213,49 @@ export const App: React.FC = () => {
       valor: data.valor,
       data: data.data,
       forma: data.forma,
-      observacao: obs
+      observacao: obs,
+      operacao_id: newOperationId()
     };
+    const proofPayload = proof ? {
+      codigo: paymentItem.codigo,
+      morador: paymentItem.morador,
+      arquivo: proof.nome,
+      arquivo_base64: proof.dataUrl,
+      mime_type: proof.tipo,
+      observacao: proof.observacao || '',
+      operacao_id: newOperationId()
+    } : null;
 
     try {
       await api.registrarPagamento(payload);
       showToast('Pagamento registrado com sucesso!');
     } catch (err: any) {
-      if (!api.isUsingDemo()) {
+      if (!api.isUsingDemo() && isNetworkFailure(err)) {
         addOfflineAction({
           type: 'pagamento',
           payload
         });
+        if (proofPayload) addOfflineAction({ type: 'comprovante', payload: proofPayload });
         setOfflineCount(getOfflineQueueCount());
         showToast('Sem conexão. Pagamento salvo na fila offline!');
+        await refreshAll();
+        return;
       } else {
         throw err;
+      }
+    }
+
+    if (proofPayload) {
+      try {
+        await api.anexarComprovante(proofPayload);
+      } catch (err: any) {
+        if (!api.isUsingDemo() && isNetworkFailure(err)) {
+          addOfflineAction({ type: 'comprovante', payload: proofPayload });
+          setOfflineCount(getOfflineQueueCount());
+          showToast('Pagamento confirmado; comprovante aguardando sincronização.');
+        } else {
+          showToast('Pagamento confirmado, mas o comprovante falhou: ' + (err.message || 'erro desconhecido'));
+        }
       }
     }
 
@@ -244,29 +278,30 @@ export const App: React.FC = () => {
   // Proof upload
   const handleConfirmProof = async (file: File, observacao: string) => {
     if (!proofItem) return;
-    await saveProofAttachment(proofItem.codigo, proofItem.morador, file, observacao);
+    const proof = await saveProofAttachment(proofItem.codigo, proofItem.morador, file, observacao);
 
     const payload = {
       codigo: proofItem.codigo,
       morador: proofItem.morador,
       arquivo: file.name,
-      observacao
+      arquivo_base64: proof.dataUrl,
+      mime_type: proof.tipo,
+      observacao,
+      operacao_id: newOperationId()
     };
 
     try {
       await api.anexarComprovante(payload);
       showToast('Comprovante anexado ao histórico');
     } catch (err: any) {
-      if (!api.isUsingDemo()) {
+      if (!api.isUsingDemo() && isNetworkFailure(err)) {
         addOfflineAction({
           type: 'comprovante',
           payload
         });
         setOfflineCount(getOfflineQueueCount());
         showToast('Comprovante salvo na fila offline.');
-      } else {
-        throw err;
-      }
+      } else throw err;
     }
   };
 
@@ -283,16 +318,14 @@ export const App: React.FC = () => {
       await api.salvarMorador(data);
       showToast('Morador salvo com sucesso!');
     } catch (err: any) {
-      if (!api.isUsingDemo()) {
+      if (!api.isUsingDemo() && isNetworkFailure(err)) {
         addOfflineAction({
           type: 'morador',
           payload: data
         });
         setOfflineCount(getOfflineQueueCount());
         showToast('Sem conexão. Morador salvo na fila offline!');
-      } else {
-        throw err;
-      }
+      } else throw err;
     }
     await refreshAll();
   };
@@ -308,7 +341,7 @@ export const App: React.FC = () => {
       });
       showToast(`Cobrança de ${item.morador} registrada como enviada.`);
     } catch (err: any) {
-      showToast(`Marcado como enviado.`);
+      showToast(`Não foi possível registrar o envio: ${err.message || 'erro desconhecido'}`);
     }
   };
 
@@ -323,7 +356,7 @@ export const App: React.FC = () => {
       });
       showToast(`Cobrança de ${item.morador} adiada por 1 dia.`);
     } catch (err: any) {
-      showToast(`Cobrança adiada por 1 dia.`);
+      showToast(`Não foi possível adiar: ${err.message || 'erro desconhecido'}`);
     }
   };
 

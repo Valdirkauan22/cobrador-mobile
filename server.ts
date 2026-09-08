@@ -6,6 +6,18 @@ import { createServer as createViteServer } from 'vite';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function validateAppsScriptUrl(value: string): URL {
+  const url = new URL(value);
+  const allowedHosts = new Set(['script.google.com', 'script.googleusercontent.com']);
+  if (url.protocol !== 'https:' || !allowedHosts.has(url.hostname)) {
+    throw new Error('Somente URLs HTTPS do Google Apps Script são permitidas.');
+  }
+  if (url.hostname === 'script.google.com' && !url.pathname.startsWith('/macros/s/')) {
+    throw new Error('URL inválida do Google Apps Script.');
+  }
+  return url;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -26,7 +38,7 @@ async function startServer() {
         return res.status(400).json({ ok: false, erro: 'Parâmetro url é obrigatório' });
       }
 
-      const urlObj = new URL(targetUrl);
+      const urlObj = validateAppsScriptUrl(targetUrl);
       for (const [key, value] of Object.entries(req.query)) {
         if (key !== 'url' && typeof value === 'string') {
           urlObj.searchParams.set(key, value);
@@ -64,7 +76,8 @@ async function startServer() {
       }
 
       // Google Apps Script doPost parses JSON from postData.contents or text/plain
-      const response = await fetch(targetUrl, {
+      const safeUrl = validateAppsScriptUrl(targetUrl);
+      const response = await fetch(safeUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/plain;charset=utf-8',

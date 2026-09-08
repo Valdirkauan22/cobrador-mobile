@@ -47,52 +47,52 @@ function getInitialDemoStore(): DemoStore {
   return {
     competencia: comp,
     moradores: [
-      { linha: 4, codigo: '101', nome: 'Carlos Eduardo Mendes', telefone: '11987654321', situacao: 'Ativo', unidade: 'Casa 12' },
-      { linha: 5, codigo: '102', nome: 'Mariana Alves Souza', telefone: '11976543210', situacao: 'Ativo', unidade: 'Lote 05' },
-      { linha: 6, codigo: '103', nome: 'Roberto Firmino Castro', telefone: '11965432109', situacao: 'Ativo', unidade: 'Casa 08' },
-      { linha: 7, codigo: '104', nome: 'Ana Paula Nogueira', telefone: '11954321098', situacao: 'Ativo', unidade: 'Quadra B - Lote 02' },
-      { linha: 8, codigo: '105', nome: 'Fernando Henrique Dias', telefone: '11943210987', situacao: 'Ativo', unidade: 'Casa 21' },
-      { linha: 9, codigo: '106', nome: 'Juliana Paes Rodrigues', telefone: '11932109876', situacao: 'Ativo', unidade: 'Apto 102' },
-      { linha: 10, codigo: '107', nome: 'Marcos Vinicius Lima', telefone: '11921098765', situacao: 'Inativo', unidade: 'Casa 04' },
+      { linha: 4, codigo: '101', nome: 'Morador Demonstração 1', telefone: '00000000000', situacao: 'Ativo', unidade: 'Casa 01' },
+      { linha: 5, codigo: '102', nome: 'Morador Demonstração 2', telefone: '00000000000', situacao: 'Ativo', unidade: 'Casa 02' },
+      { linha: 6, codigo: '103', nome: 'Morador Demonstração 3', telefone: '00000000000', situacao: 'Ativo', unidade: 'Casa 03' },
+      { linha: 7, codigo: '104', nome: 'Morador Demonstração 4', telefone: '00000000000', situacao: 'Ativo', unidade: 'Casa 04' },
+      { linha: 8, codigo: '105', nome: 'Morador Demonstração 5', telefone: '00000000000', situacao: 'Ativo', unidade: 'Casa 05' },
+      { linha: 9, codigo: '106', nome: 'Morador Demonstração 6', telefone: '00000000000', situacao: 'Ativo', unidade: 'Casa 06' },
+      { linha: 10, codigo: '107', nome: 'Morador Demonstração 7', telefone: '00000000000', situacao: 'Inativo', unidade: 'Casa 07' },
     ],
     pendentes: [
       {
         linha: 4,
         codigo: '101',
-        morador: 'Carlos Eduardo Mendes',
-        telefone: '11987654321',
+        morador: 'Morador Demonstração 1',
+        telefone: '00000000000',
         saldo: 'R$ 150,00',
         vencimento: `10/${comp}`,
         unidade: 'Casa 12',
-        mensagem: `Olá Carlos Eduardo Mendes, tudo bem? A contribuição referente a ${comp}, no valor de R$ 150,00, permanece em aberto. Obrigado.`
+        mensagem: `Olá Morador Demonstração 1, tudo bem? A contribuição referente a ${comp}, no valor de R$ 150,00, permanece em aberto. Obrigado.`
       },
       {
         linha: 6,
         codigo: '103',
-        morador: 'Roberto Firmino Castro',
-        telefone: '11965432109',
+        morador: 'Morador Demonstração 3',
+        telefone: '00000000000',
         saldo: 'R$ 150,00',
         vencimento: `10/${comp}`,
         unidade: 'Casa 08',
-        mensagem: `Olá Roberto Firmino Castro, tudo bem? A contribuição referente a ${comp}, no valor de R$ 150,00, permanece em aberto. Obrigado.`
+        mensagem: `Olá Morador Demonstração 3, tudo bem? A contribuição referente a ${comp}, no valor de R$ 150,00, permanece em aberto. Obrigado.`
       },
       {
         linha: 8,
         codigo: '105',
-        morador: 'Fernando Henrique Dias',
-        telefone: '11943210987',
+        morador: 'Morador Demonstração 5',
+        telefone: '00000000000',
         saldo: 'R$ 300,00',
         vencimento: `10/${comp}`,
         unidade: 'Casa 21',
-        mensagem: `Olá Fernando Henrique Dias, tudo bem? A contribuição referente a ${comp}, no valor de R$ 300,00, permanece em aberto. Obrigado.`
+        mensagem: `Olá Morador Demonstração 5, tudo bem? A contribuição referente a ${comp}, no valor de R$ 300,00, permanece em aberto. Obrigado.`
       }
     ],
     pagos: [
       {
         linha: 5,
         codigo: '102',
-        morador: 'Mariana Alves Souza',
-        telefone: '11976543210',
+        morador: 'Morador Demonstração 2',
+        telefone: '00000000000',
         valor_pago: 'R$ 150,00',
         data_pagamento: `05/${comp}`,
         forma_pagamento: 'PIX',
@@ -101,8 +101,8 @@ function getInitialDemoStore(): DemoStore {
       {
         linha: 7,
         codigo: '104',
-        morador: 'Ana Paula Nogueira',
-        telefone: '11954321098',
+        morador: 'Morador Demonstração 4',
+        telefone: '00000000000',
         valor_pago: 'R$ 150,00',
         data_pagamento: `06/${comp}`,
         forma_pagamento: 'Transferencia',
@@ -111,8 +111,8 @@ function getInitialDemoStore(): DemoStore {
       {
         linha: 9,
         codigo: '106',
-        morador: 'Juliana Paes Rodrigues',
-        telefone: '11932109876',
+        morador: 'Morador Demonstração 6',
+        telefone: '00000000000',
         valor_pago: 'R$ 150,00',
         data_pagamento: `08/${comp}`,
         forma_pagamento: 'Dinheiro',
@@ -480,6 +480,7 @@ export class CobradorApi {
     data: string;
     forma: string;
     observacao: string;
+    operacao_id?: string;
   }): Promise<void> {
     if (this.isUsingDemo()) {
       const store = loadDemoStore();
@@ -525,7 +526,8 @@ export class CobradorApi {
       valor: params.valor,
       data: params.data,
       forma: params.forma,
-      observacao: params.observacao
+      observacao: params.observacao,
+      operacao_id: params.operacao_id
     });
   }
 
@@ -534,6 +536,9 @@ export class CobradorApi {
     morador: string;
     arquivo: string;
     observacao: string;
+    arquivo_base64?: string;
+    mime_type?: string;
+    operacao_id?: string;
   }): Promise<void> {
     if (this.isUsingDemo()) {
       const store = loadDemoStore();
