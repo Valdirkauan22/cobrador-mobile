@@ -1,1 +1,0 @@
--keepclassmembers class br.com.associacao.cobradormobile.MainActivity$AndroidBridge { public *; }

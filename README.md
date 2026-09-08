@@ -1,36 +1,28 @@
-# Cobrador Mobile Android
+# Cobrador Mobile (React + TypeScript)
 
-Aplicativo Android nativo que incorpora o Cobrador Mobile e utiliza a mesma
-planilha e o mesmo Apps Script do Cobrador V8.2.
+Aplicativo web moderno e responsivo em **React (TypeScript + Vite + Tailwind CSS)** para gestão de mensalidades e controle de cobranças de Associações de Moradores.
 
-## Recursos Android
+O sistema integra-se diretamente com o backend Google Sheets / Google Apps Script (`Backend_Planilha_v8_2.gs`) ou pode ser executado em modo de demonstração local.
 
-- instalação como aplicativo independente;
-- câmera, galeria e seletor de PDF para comprovantes;
-- recibo PDF gerado no próprio aparelho;
-- compartilhamento nativo do recibo, inclusive pelo WhatsApp;
-- armazenamento local da configuração e dos comprovantes;
-- painel, pagamentos, moradores, histórico, mensagens e backups.
+## Funcionalidades Principais
 
-## Compilar no Android Studio
+- **Painel Geral de Métricas**: Indicadores em tempo real de Moradores, Pagos, A pagar e Total em aberto, além de previsão e arrecadação atual da competência.
+- **A Pagar (Pendentes)**: Busca em tempo real, visualização de débitos e vencimentos, envio rápido de mensagem personalizada de cobrança via WhatsApp, registro completo de pagamentos e histórico.
+- **Pagos**: Busca de pagadores, emissão e compartilhamento de recibo em PDF gerado no próprio navegador, anexo de comprovantes (fotos/documentos salvos em IndexedDB local e registrados no histórico).
+- **Cadastro de Moradores**: Criação e edição de moradores, códigos, telefones e situação (Ativo / Inativo).
+- **Menu Mais**:
+  - 📊 **Painel Anual**: Visão mensal da arrecadação e porcentagem de quitação ao longo do ano.
+  - ✉️ **Mensagens Automáticas**: Editor de modelos de WhatsApp (Lembretes, Vencimentos, 1ª e 2ª Cobranças, Agradecimentos) com variáveis dinâmicas (`[nome]`, `[competencia]`, `[valor]`, `[vencimento]`).
+  - ☁️ **Backup Agora**: Criação de cópia de segurança na nuvem.
+  - 🕑 **Ativar Backup Diário**: Configuração de rotina diária no Google Drive.
+  - ⬇️ **Exportar Relação**: Download de arquivo CSV formatado com os pagamentos e pendências.
+  - ⚙️ **Configurações de Conexão**: Alternância entre conexão com Google Apps Script (`/exec` e chave) e Modo Demonstração (local).
 
-1. Instale o Android Studio com Android SDK 35 e JDK 17.
-2. Abra a pasta `Cobrador_Mobile_Android` como projeto.
-3. Aguarde a sincronização do Gradle e aceite a instalação dos componentes.
-4. Para testar no celular: ative a depuração USB e clique em **Run**.
-5. Para gerar o APK: **Build > Build App Bundles or APKs > Build APKs**.
-6. O APK será criado em `app/build/outputs/apk/debug/app-debug.apk`.
+## Execução
 
-Para publicação na Play Store, use **Build > Generate Signed Bundle / APK** e
-gere um arquivo AAB assinado. Guarde a chave de assinatura em local seguro.
+```bash
+npm install
+npm run dev
+```
 
-## Primeira abertura
-
-Informe a URL do Web App terminada em `/exec` e a chave correspondente. Esses
-dados não estão gravados no código. O arquivo `Backend_Planilha_v8_2.gs` está
-incluído para atualização do Apps Script.
-
-## Segurança
-
-O projeto não contém a chave do Apps Script, senhas ou dados dos moradores.
-Não publique uma versão modificada que tenha credenciais escritas no código.
+A aplicação será iniciada na porta 3000 (`http://localhost:3000`).
