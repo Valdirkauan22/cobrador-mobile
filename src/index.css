@@ -9,9 +9,36 @@
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   background-color: #eef3f8;
   color: #172033;
   -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Respeita recortes, barra de status e navegação por gestos do Android/iOS.
+ * Os fallbacks mantêm exatamente o mesmo espaçamento no navegador comum.
+ */
+.app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-header-safe {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-bottom: 0.75rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+.app-main-safe {
+  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
+}
+
+.app-bottom-nav-safe {
+  padding-bottom: max(0.875rem, env(safe-area-inset-bottom));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
 }
 
 /* Custom Scrollbars */

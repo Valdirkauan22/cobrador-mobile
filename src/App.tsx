@@ -433,7 +433,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#eef3f8] flex flex-col selection:bg-[#1769aa] selection:text-white">
+    <div className="app-shell bg-[#eef3f8] flex flex-col selection:bg-[#1769aa] selection:text-white">
       {/* Header */}
       <Header
         competencia={dashboard.competencia}
@@ -442,7 +442,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Container */}
-      <main className="flex-1 w-full max-w-3xl mx-auto px-3 sm:px-4 pt-3.5">
+      <main className="app-main-safe flex-1 w-full max-w-3xl mx-auto px-3 sm:px-4 pt-3.5">
         {/* Metric Cards Banner */}
         <MetricCards
           totalMoradores={dashboard.total_moradores}

@@ -19,7 +19,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   return (
     <nav
       id="bottom-nav"
-      className="fixed bottom-0 left-0 right-0 z-30 bg-white/92 backdrop-blur-md grid grid-cols-4 px-3 pt-2 pb-3.5 shadow-[0_-6px_24px_rgba(15,23,42,0.08)] border-t border-slate-200/80"
+      className="app-bottom-nav-safe fixed bottom-0 left-0 right-0 z-30 bg-white/92 backdrop-blur-md grid grid-cols-4 px-3 pt-2 shadow-[0_-6px_24px_rgba(15,23,42,0.08)] border-t border-slate-200/80"
     >
       {/* Pendentes */}
       <button

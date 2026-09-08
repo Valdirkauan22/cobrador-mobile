@@ -11,7 +11,7 @@ export const Header: React.FC<HeaderProps> = ({ competencia, isDemo, onOpenSetti
   return (
     <header
       id="app-header"
-      className="sticky top-0 z-20 px-4 py-3 flex justify-between items-center text-white backdrop-blur-md"
+      className="app-header-safe sticky top-0 z-20 px-4 flex justify-between items-center text-white backdrop-blur-md"
       style={{
         background: 'linear-gradient(135deg, #0a2540 0%, #155e9c 100%)',
         boxShadow: '0 4px 20px rgba(10, 37, 64, 0.25)'
