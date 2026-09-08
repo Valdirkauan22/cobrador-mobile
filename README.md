@@ -1,6 +1,6 @@
 # Cobrador Mobile — Web App/PWA
 
-Versão atual: **1.3.0**
+Versão atual: **1.3.1**
 
 Aplicativo web moderno e responsivo em **React (TypeScript + Vite + Tailwind CSS)** para gestão de mensalidades e controle de cobranças de Associações de Moradores.
 

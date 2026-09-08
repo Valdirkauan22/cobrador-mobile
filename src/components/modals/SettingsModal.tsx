@@ -40,6 +40,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [offlineCount, setOfflineCount] = useState(getOfflineQueueCount());
+  const [showAdvancedConnection, setShowAdvancedConnection] = useState(false);
 
   useEffect(() => {
     setUrl(config.url || DEFAULT_URL);
@@ -51,15 +52,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim() || !key.trim()) {
-      alert('Informe a URL do Web App (/exec) e a Chave de acesso.');
+    if (!key.trim()) {
+      alert('Informe a Chave de acesso. O endereço do Web App já está configurado automaticamente.');
       return;
     }
     setIsTesting(true);
     try {
       await onSave({
         ...config,
-        url: url.trim(),
+        url: url.trim() || DEFAULT_URL,
         key: key.trim(),
         pixKey: pixKey.trim(),
         nomeAssociacao: nomeAssociacao.trim(),
@@ -128,7 +129,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Nome da Associação */}
-        <div>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <LinkIcon className="w-4 h-4 text-emerald-700 shrink-0" />
+              <div className="min-w-0"><strong className="block text-xs text-emerald-900">Endereço configurado automaticamente</strong><span className="block text-[10px] text-emerald-700 truncate">Google Apps Script da Associação</span></div>
+            </div>
+            <button type="button" onClick={()=>setShowAdvancedConnection(!showAdvancedConnection)} className="text-[10px] font-bold text-[#1769aa] bg-white px-2.5 py-1.5 rounded-lg border border-emerald-200">{showAdvancedConnection?'Ocultar':'Alterar'}</button>
+          </div>
+        </div>
+
+        {showAdvancedConnection && <div>
           <label className="block text-xs font-bold text-[#68778a] uppercase tracking-wider mb-1 flex items-center gap-1.5">
             <Building2 className="w-3.5 h-3.5" />
             <span>Nome da Associação / Condomínio</span>
@@ -141,7 +152,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             placeholder="Ex: Associação dos Moradores do Bairro"
             className="w-full bg-[#fbfdff] border border-[#cad5e1] rounded-xl p-3 text-xs text-[#172033] outline-none focus:border-[#1769aa]"
           />
-        </div>
+          <p className="text-[10px] text-amber-700 mt-1">Altere somente se uma nova implantação do Apps Script for criada.</p>
+        </div>}
 
         {/* Chave PIX */}
         <div>

@@ -481,7 +481,7 @@ export const App: React.FC = () => {
   };
 
   const handleCheckUpdate = async () => {
-    try { const r = await checkLatestRelease('1.3.0'); if(r.available && r.url) { if(confirm(`Nova versão ${r.version} disponível. Abrir página de atualização?`)) window.open(r.url,'_blank'); } else showToast('Você já está usando a versão mais recente.'); }
+    try { const r = await checkLatestRelease('1.3.1'); if(r.available && r.url) { if(confirm(`Nova versão ${r.version} disponível. Abrir página de atualização?`)) window.open(r.url,'_blank'); } else showToast('Você já está usando a versão mais recente.'); }
     catch(e:any){ showToast(e.message || 'Falha ao verificar atualização.'); }
   };
 
