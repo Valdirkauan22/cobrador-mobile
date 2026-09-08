@@ -8,7 +8,16 @@ import {
   Templates
 } from './types';
 import { CobradorApi } from './utils/api';
-import { loadConfig, saveConfig, saveProofAttachment } from './utils/storage';
+import {
+  addOfflineAction,
+  getOfflineQueue,
+  getOfflineQueueCount,
+  loadConfig,
+  removeOfflineAction,
+  saveConfig,
+  saveProofAttachment
+} from './utils/storage';
+import { downloadMonthlyReportPdf } from './utils/pdf';
 import { Header } from './components/Header';
 import { MetricCards } from './components/MetricCards';
 import { BottomNav, NavTab } from './components/BottomNav';
@@ -31,6 +40,10 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('pendentes');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [offlineCount, setOfflineCount] = useState<number>(getOfflineQueueCount());
 
   const [dashboard, setDashboard] = useState<DashboardData>({
     competencia: '',
@@ -78,12 +91,66 @@ export const App: React.FC = () => {
     try {
       const data = await api.getDashboardData();
       setDashboard(data);
+      setOfflineCount(getOfflineQueueCount());
     } catch (err: any) {
       showToast('Erro ao sincronizar: ' + (err.message || 'Verifique a conexão'));
     } finally {
       setIsLoading(false);
     }
   }, [api, showToast]);
+
+  // Offline queue processor
+  const processOfflineQueue = useCallback(async () => {
+    const queue = getOfflineQueue();
+    if (queue.length === 0) return;
+    setIsLoading(true);
+    let synced = 0;
+
+    for (const action of queue) {
+      try {
+        if (action.type === 'pagamento') {
+          await api.registrarPagamento(action.payload);
+        } else if (action.type === 'morador') {
+          await api.salvarMorador(action.payload);
+        } else if (action.type === 'comprovante') {
+          await api.anexarComprovante(action.payload);
+        }
+        removeOfflineAction(action.id);
+        synced++;
+      } catch (err) {
+        console.error('Falha ao processar item offline:', action, err);
+        break;
+      }
+    }
+
+    setOfflineCount(getOfflineQueueCount());
+    if (synced > 0) {
+      showToast(`${synced} ação(ões) offline sincronizada(s)!`);
+      await refreshAll();
+    }
+    setIsLoading(false);
+  }, [api, refreshAll, showToast]);
+
+  // Online / Offline listeners
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToast('Conexão restabelecida! Sincronizando fila...');
+      processOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToast('Modo offline: ações serão guardadas para envio posterior.');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [processOfflineQueue, showToast]);
 
   useEffect(() => {
     refreshAll();
@@ -93,19 +160,30 @@ export const App: React.FC = () => {
   const handleSaveSettings = async (newCfg: AppConfig) => {
     saveConfig(newCfg);
     setConfig(newCfg);
-    const testApi = new CobradorApi(newCfg);
-    const h = await testApi.health();
-    showToast('Conectado: ' + h.versao);
+    if (!newCfg.isDemo && newCfg.url) {
+      const testApi = new CobradorApi(newCfg);
+      const h = await testApi.health();
+      showToast('Conectado: ' + (h.versao || 'OK'));
+    } else {
+      showToast('Configurações salvas!');
+    }
+    await refreshAll();
   };
 
   const handleUseDemo = () => {
-    const demoCfg: AppConfig = { url: '', key: '', isDemo: true };
+    const demoCfg: AppConfig = {
+      url: '',
+      key: '',
+      pixKey: config.pixKey || '',
+      nomeAssociacao: config.nomeAssociacao || 'Associação de Moradores',
+      isDemo: true
+    };
     saveConfig(demoCfg);
     setConfig(demoCfg);
     showToast('Modo Demonstração ativado');
   };
 
-  // Payment confirmation
+  // Payment confirmation with offline fallback
   const handleConfirmPayment = async (data: {
     valor: number;
     data: string;
@@ -121,7 +199,7 @@ export const App: React.FC = () => {
       obs += (obs ? ' — ' : '') + 'Comprovante: ' + data.file.name;
     }
 
-    await api.registrarPagamento({
+    const payload = {
       codigo: paymentItem.codigo,
       morador: paymentItem.morador,
       telefone: paymentItem.telefone,
@@ -129,16 +207,32 @@ export const App: React.FC = () => {
       data: data.data,
       forma: data.forma,
       observacao: obs
-    });
+    };
+
+    try {
+      await api.registrarPagamento(payload);
+      showToast('Pagamento registrado com sucesso!');
+    } catch (err: any) {
+      if (!api.isUsingDemo()) {
+        addOfflineAction({
+          type: 'pagamento',
+          payload
+        });
+        setOfflineCount(getOfflineQueueCount());
+        showToast('Sem conexão. Pagamento salvo na fila offline!');
+      } else {
+        throw err;
+      }
+    }
 
     await refreshAll();
-    showToast('Pagamento registrado com sucesso!');
 
     // Prepare paid item for receipt preview
     const newlyPaid: PagoItem = {
       codigo: paymentItem.codigo,
       morador: paymentItem.morador,
       telefone: paymentItem.telefone,
+      unidade: paymentItem.unidade,
       valor_pago: `R$ ${data.valor.toFixed(2).replace('.', ',')}`,
       data_pagamento: data.data,
       forma_pagamento: data.forma
@@ -151,26 +245,92 @@ export const App: React.FC = () => {
   const handleConfirmProof = async (file: File, observacao: string) => {
     if (!proofItem) return;
     await saveProofAttachment(proofItem.codigo, proofItem.morador, file, observacao);
-    await api.anexarComprovante({
+
+    const payload = {
       codigo: proofItem.codigo,
       morador: proofItem.morador,
       arquivo: file.name,
       observacao
-    });
-    showToast('Comprovante anexado ao histórico');
+    };
+
+    try {
+      await api.anexarComprovante(payload);
+      showToast('Comprovante anexado ao histórico');
+    } catch (err: any) {
+      if (!api.isUsingDemo()) {
+        addOfflineAction({
+          type: 'comprovante',
+          payload
+        });
+        setOfflineCount(getOfflineQueueCount());
+        showToast('Comprovante salvo na fila offline.');
+      } else {
+        throw err;
+      }
+    }
   };
 
-  // Resident save
+  // Resident save with offline fallback
   const handleSaveResident = async (data: {
     linha?: number;
     codigo: string;
     nome: string;
     telefone: string;
     situacao: string;
+    unidade?: string;
   }) => {
-    await api.salvarMorador(data);
+    try {
+      await api.salvarMorador(data);
+      showToast('Morador salvo com sucesso!');
+    } catch (err: any) {
+      if (!api.isUsingDemo()) {
+        addOfflineAction({
+          type: 'morador',
+          payload: data
+        });
+        setOfflineCount(getOfflineQueueCount());
+        showToast('Sem conexão. Morador salvo na fila offline!');
+      } else {
+        throw err;
+      }
+    }
     await refreshAll();
-    showToast('Morador salvo com sucesso!');
+  };
+
+  // Quick action: Mark as sent
+  const handleMarkSent = async (item: PendenteItem) => {
+    try {
+      await api.marcar({
+        linha: item.linha,
+        codigo: item.codigo,
+        resultado: 'ENVIADO',
+        observacao: `Cobrança enviada via WhatsApp em ${new Date().toLocaleDateString('pt-BR')}`
+      });
+      showToast(`Cobrança de ${item.morador} registrada como enviada.`);
+    } catch (err: any) {
+      showToast(`Marcado como enviado.`);
+    }
+  };
+
+  // Quick action: Postpone 1 day
+  const handlePostpone = async (item: PendenteItem) => {
+    try {
+      await api.marcar({
+        linha: item.linha,
+        codigo: item.codigo,
+        resultado: 'ADIAR_1_DIA',
+        observacao: `Cobrança adiada por 1 dia em ${new Date().toLocaleDateString('pt-BR')}`
+      });
+      showToast(`Cobrança de ${item.morador} adiada por 1 dia.`);
+    } catch (err: any) {
+      showToast(`Cobrança adiada por 1 dia.`);
+    }
+  };
+
+  // Monthly report generation
+  const handleMonthlyReport = () => {
+    downloadMonthlyReportPdf(dashboard, config.nomeAssociacao || 'Associação de Moradores');
+    showToast('Relatório Mensal PDF gerado com sucesso!');
   };
 
   // Templates save
@@ -202,9 +362,23 @@ export const App: React.FC = () => {
   // CSV export
   const handleExportCSV = () => {
     const rows = [
-      ['Status', 'Código', 'Morador', 'Telefone', 'Valor'],
-      ...(dashboard.pagos || []).map((x) => ['Pago', x.codigo, x.morador, x.telefone, x.valor_pago]),
-      ...(dashboard.pendentes || []).map((x) => ['A pagar', x.codigo, x.morador, x.telefone, x.saldo])
+      ['Status', 'Código', 'Unidade', 'Morador', 'Telefone', 'Valor'],
+      ...(dashboard.pagos || []).map((x) => [
+        'Pago',
+        x.codigo,
+        x.unidade || '',
+        x.morador,
+        x.telefone,
+        x.valor_pago
+      ]),
+      ...(dashboard.pendentes || []).map((x) => [
+        'A pagar',
+        x.codigo,
+        x.unidade || '',
+        x.morador,
+        x.telefone,
+        x.saldo
+      ])
     ];
 
     const csvContent =
@@ -251,11 +425,15 @@ export const App: React.FC = () => {
         {currentTab === 'pendentes' && (
           <PendentesView
             items={dashboard.pendentes}
+            pixKey={config.pixKey}
             onRefresh={refreshAll}
             onPayment={(item) => setPaymentItem(item)}
             onHistory={(codigo, nome) =>
               setHistoryModal({ isOpen: true, codigo, nome })
             }
+            onMarkSent={handleMarkSent}
+            onPostpone={handlePostpone}
+            onNotify={showToast}
             isLoading={isLoading}
           />
         )}
@@ -295,6 +473,10 @@ export const App: React.FC = () => {
             onDailyBackup={handleDailyBackup}
             onExportCSV={handleExportCSV}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            onMonthlyReport={handleMonthlyReport}
+            offlineCount={offlineCount}
+            onSyncOffline={processOfflineQueue}
+            isOnline={isOnline}
           />
         )}
       </main>
@@ -344,6 +526,7 @@ export const App: React.FC = () => {
         isOpen={!!receiptItem}
         item={receiptItem}
         competencia={dashboard.competencia}
+        nomeAssociacao={config.nomeAssociacao}
         onClose={() => setReceiptItem(null)}
         onNotify={showToast}
       />
@@ -367,6 +550,7 @@ export const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         onSave={handleSaveSettings}
         onUseDemo={handleUseDemo}
+        onSyncOffline={processOfflineQueue}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings } from 'lucide-react';
+import { Building2, Settings } from 'lucide-react';
 
 interface HeaderProps {
   competencia: string;
@@ -11,36 +11,43 @@ export const Header: React.FC<HeaderProps> = ({ competencia, isDemo, onOpenSetti
   return (
     <header
       id="app-header"
-      className="sticky top-0 z-20 px-4 py-3.5 flex justify-between items-center text-white shadow-md"
+      className="sticky top-0 z-20 px-4 py-3 flex justify-between items-center text-white backdrop-blur-md"
       style={{
-        background: 'linear-gradient(135deg, #0d3156, #1769aa)',
-        boxShadow: '0 4px 18px rgba(18, 59, 102, 0.2)'
+        background: 'linear-gradient(135deg, #0a2540 0%, #155e9c 100%)',
+        boxShadow: '0 4px 20px rgba(10, 37, 64, 0.25)'
       }}
     >
-      <div>
-        <div className="flex items-center gap-2">
-          <b className="text-xl font-bold tracking-tight">Cobrador Mobile</b>
-          {isDemo && (
-            <span
-              id="badge-demo"
-              className="text-[10px] font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full uppercase tracking-wider"
-            >
-              Demo
-            </span>
-          )}
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-sky-200 shrink-0">
+          <Building2 className="w-5 h-5" />
         </div>
-        <small id="competencia" className="block text-[#dceaf7] text-xs font-medium mt-0.5">
-          {competencia ? `Competência ${competencia}` : 'Associação de Moradores'}
-        </small>
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight">
+              Cobrador Mobile
+            </h1>
+            {isDemo && (
+              <span
+                id="badge-demo"
+                className="text-[9px] font-black bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-md uppercase tracking-wider shadow-xs"
+              >
+                DEMO
+              </span>
+            )}
+          </div>
+          <p id="competencia" className="text-[#cce2f7] text-[11px] font-medium leading-none mt-0.5">
+            {competencia ? `Competência ${competencia}` : 'Associação de Moradores'}
+          </p>
+        </div>
       </div>
 
       <button
         id="btn-open-settings"
         onClick={onOpenSettings}
         aria-label="Configurações da conexão"
-        className="w-11 h-11 flex items-center justify-center rounded-xl bg-white/15 border border-white/20 text-white hover:bg-white/25 active:scale-95 transition-all"
+        className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 active:scale-95 transition-all cursor-pointer shadow-xs"
       >
-        <Settings className="w-5 h-5" />
+        <Settings className="w-4 h-4" />
       </button>
     </header>
   );

@@ -47,13 +47,13 @@ function getInitialDemoStore(): DemoStore {
   return {
     competencia: comp,
     moradores: [
-      { linha: 4, codigo: '101', nome: 'Carlos Eduardo Mendes', telefone: '11987654321', situacao: 'Ativo' },
-      { linha: 5, codigo: '102', nome: 'Mariana Alves Souza', telefone: '11976543210', situacao: 'Ativo' },
-      { linha: 6, codigo: '103', nome: 'Roberto Firmino Castro', telefone: '11965432109', situacao: 'Ativo' },
-      { linha: 7, codigo: '104', nome: 'Ana Paula Nogueira', telefone: '11954321098', situacao: 'Ativo' },
-      { linha: 8, codigo: '105', nome: 'Fernando Henrique Dias', telefone: '11943210987', situacao: 'Ativo' },
-      { linha: 9, codigo: '106', nome: 'Juliana Paes Rodrigues', telefone: '11932109876', situacao: 'Ativo' },
-      { linha: 10, codigo: '107', nome: 'Marcos Vinicius Lima', telefone: '11921098765', situacao: 'Inativo' },
+      { linha: 4, codigo: '101', nome: 'Carlos Eduardo Mendes', telefone: '11987654321', situacao: 'Ativo', unidade: 'Casa 12' },
+      { linha: 5, codigo: '102', nome: 'Mariana Alves Souza', telefone: '11976543210', situacao: 'Ativo', unidade: 'Lote 05' },
+      { linha: 6, codigo: '103', nome: 'Roberto Firmino Castro', telefone: '11965432109', situacao: 'Ativo', unidade: 'Casa 08' },
+      { linha: 7, codigo: '104', nome: 'Ana Paula Nogueira', telefone: '11954321098', situacao: 'Ativo', unidade: 'Quadra B - Lote 02' },
+      { linha: 8, codigo: '105', nome: 'Fernando Henrique Dias', telefone: '11943210987', situacao: 'Ativo', unidade: 'Casa 21' },
+      { linha: 9, codigo: '106', nome: 'Juliana Paes Rodrigues', telefone: '11932109876', situacao: 'Ativo', unidade: 'Apto 102' },
+      { linha: 10, codigo: '107', nome: 'Marcos Vinicius Lima', telefone: '11921098765', situacao: 'Inativo', unidade: 'Casa 04' },
     ],
     pendentes: [
       {
@@ -63,6 +63,7 @@ function getInitialDemoStore(): DemoStore {
         telefone: '11987654321',
         saldo: 'R$ 150,00',
         vencimento: `10/${comp}`,
+        unidade: 'Casa 12',
         mensagem: `Olá Carlos Eduardo Mendes, tudo bem? A contribuição referente a ${comp}, no valor de R$ 150,00, permanece em aberto. Obrigado.`
       },
       {
@@ -72,6 +73,7 @@ function getInitialDemoStore(): DemoStore {
         telefone: '11965432109',
         saldo: 'R$ 150,00',
         vencimento: `10/${comp}`,
+        unidade: 'Casa 08',
         mensagem: `Olá Roberto Firmino Castro, tudo bem? A contribuição referente a ${comp}, no valor de R$ 150,00, permanece em aberto. Obrigado.`
       },
       {
@@ -81,6 +83,7 @@ function getInitialDemoStore(): DemoStore {
         telefone: '11943210987',
         saldo: 'R$ 300,00',
         vencimento: `10/${comp}`,
+        unidade: 'Casa 21',
         mensagem: `Olá Fernando Henrique Dias, tudo bem? A contribuição referente a ${comp}, no valor de R$ 300,00, permanece em aberto. Obrigado.`
       }
     ],
@@ -92,7 +95,8 @@ function getInitialDemoStore(): DemoStore {
         telefone: '11976543210',
         valor_pago: 'R$ 150,00',
         data_pagamento: `05/${comp}`,
-        forma_pagamento: 'PIX'
+        forma_pagamento: 'PIX',
+        unidade: 'Lote 05'
       },
       {
         linha: 7,
@@ -101,7 +105,8 @@ function getInitialDemoStore(): DemoStore {
         telefone: '11954321098',
         valor_pago: 'R$ 150,00',
         data_pagamento: `06/${comp}`,
-        forma_pagamento: 'Transferencia'
+        forma_pagamento: 'Transferencia',
+        unidade: 'Quadra B - Lote 02'
       },
       {
         linha: 9,
@@ -110,7 +115,8 @@ function getInitialDemoStore(): DemoStore {
         telefone: '11932109876',
         valor_pago: 'R$ 150,00',
         data_pagamento: `08/${comp}`,
-        forma_pagamento: 'Dinheiro'
+        forma_pagamento: 'Dinheiro',
+        unidade: 'Apto 102'
       }
     ],
     historico: {
@@ -167,11 +173,12 @@ function saveDemoStore(store: DemoStore): void {
   localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(store));
 }
 
-// Live Google Apps Script API invoker
+// Live Google Apps Script API invoker via /api/sheets proxy
 async function callRemoteApi(
   cfg: AppConfig,
   action: string,
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
+  queryParams?: Record<string, string>
 ): Promise<any> {
   if (!cfg.url || !cfg.key) {
     throw new Error('Configure a URL do Web App e a chave de acesso.');
@@ -179,14 +186,33 @@ async function callRemoteApi(
 
   let response: Response;
   if (body) {
-    response = await fetch(cfg.url, {
+    response = await fetch('/api/sheets', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...body, acao: action, chave: cfg.key })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: cfg.url,
+        acao: action,
+        chave: cfg.key,
+        ...body
+      })
     });
   } else {
-    const params = new URLSearchParams({ acao: action, chave: cfg.key });
-    response = await fetch(`${cfg.url}?${params.toString()}`);
+    const params = new URLSearchParams({
+      url: cfg.url,
+      acao: action,
+      chave: cfg.key,
+      ...(queryParams || {})
+    });
+    response = await fetch(`/api/sheets?${params.toString()}`);
+  }
+
+  if (!response.ok) {
+    let errMsg = 'Falha na requisição ao servidor proxy.';
+    try {
+      const errJson = await response.json();
+      errMsg = errJson.erro || errMsg;
+    } catch {}
+    throw new Error(errMsg);
   }
 
   const json = await response.json();
@@ -211,29 +237,83 @@ export class CobradorApi {
   }
 
   async getDashboardData(): Promise<DashboardData> {
+    const parseVal = (val: unknown) => {
+      if (typeof val === 'number') return isNaN(val) ? 0 : val;
+      const str = String(val ?? '');
+      return parseFloat(str.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+    };
+
+    const toStr = (val: unknown) => String(val ?? '').trim();
+    const toLower = (val: unknown) => toStr(val).toLowerCase();
+
     if (this.isUsingDemo()) {
       const store = loadDemoStore();
-      const parseVal = (str: string) =>
-        parseFloat(str.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+      const moradoresCadastrados = (store.moradores || []).filter(
+        (m) => toStr(m.nome) !== '' && toStr(m.situacao) !== 'Inativo'
+      );
+      const codigosSet = new Set(moradoresCadastrados.map((m) => toStr(m.codigo)).filter(Boolean));
+      const nomesSet = new Set(moradoresCadastrados.map((m) => toLower(m.nome)).filter(Boolean));
 
-      const totalPrevistoNum =
-        store.pendentes.reduce((acc, cur) => acc + parseVal(cur.saldo), 0) +
-        store.pagos.reduce((acc, cur) => acc + parseVal(cur.valor_pago), 0);
+      const mapaUnidades = new Map<string, string>();
+      moradoresCadastrados.forEach((m) => {
+        const u = toStr(m.unidade);
+        const cod = toStr(m.codigo);
+        const nome = toLower(m.nome);
+        if (u) {
+          if (cod) mapaUnidades.set(cod, u);
+          if (nome) mapaUnidades.set(nome, u);
+        }
+      });
 
-      const totalPagoNum = store.pagos.reduce((acc, cur) => acc + parseVal(cur.valor_pago), 0);
-      const totalPendenteNum = store.pendentes.reduce((acc, cur) => acc + parseVal(cur.saldo), 0);
+      const pendentesFiltrados = store.pendentes
+        .filter((p) => {
+          const cod = toStr(p.codigo);
+          const nome = toLower(p.morador);
+          return (cod && codigosSet.has(cod)) || (nome && nomesSet.has(nome));
+        })
+        .map((p) => {
+          const cod = toStr(p.codigo);
+          const nome = toLower(p.morador);
+          return {
+            ...p,
+            codigo: cod,
+            morador: toStr(p.morador),
+            unidade: toStr(p.unidade) || mapaUnidades.get(cod) || mapaUnidades.get(nome) || ''
+          };
+        });
+
+      const pagosFiltrados = store.pagos
+        .filter((p) => {
+          const cod = toStr(p.codigo);
+          const nome = toLower(p.morador);
+          return (cod && codigosSet.has(cod)) || (nome && nomesSet.has(nome));
+        })
+        .map((p) => {
+          const cod = toStr(p.codigo);
+          const nome = toLower(p.morador);
+          return {
+            ...p,
+            codigo: cod,
+            morador: toStr(p.morador),
+            unidade: toStr(p.unidade) || mapaUnidades.get(cod) || mapaUnidades.get(nome) || ''
+          };
+        });
+
+      const totalPagoNum = pagosFiltrados.reduce((acc, cur) => acc + parseVal(cur.valor_pago), 0);
+      const totalPendenteNum = pendentesFiltrados.reduce((acc, cur) => acc + parseVal(cur.saldo), 0);
+      const totalPrevistoNum = totalPagoNum + totalPendenteNum;
 
       return {
-        competencia: store.competencia,
-        total_moradores: store.moradores.length,
-        qtd_pagos: store.pagos.length,
-        qtd_pendentes: store.pendentes.length,
+        competencia: toStr(store.competencia),
+        total_moradores: moradoresCadastrados.length,
+        qtd_pagos: pagosFiltrados.length,
+        qtd_pendentes: pendentesFiltrados.length,
         total_previsto: formatBRL(totalPrevistoNum),
         total_pago: formatBRL(totalPagoNum),
         total_pendente: formatBRL(totalPendenteNum),
-        pagos: store.pagos,
-        pendentes: store.pendentes,
-        moradores: store.moradores
+        pagos: pagosFiltrados,
+        pendentes: pendentesFiltrados,
+        moradores: moradoresCadastrados
       };
     }
 
@@ -242,17 +322,114 @@ export class CobradorApi {
       callRemoteApi(this.cfg, 'moradores')
     ]);
 
+    // Filtrar apenas moradores devidamente cadastrados (com nome e não inativos)
+    const moradoresCadastrados: MoradorItem[] = (m.moradores || []).map((x: any) => ({
+      ...x,
+      codigo: toStr(x.codigo),
+      nome: toStr(x.nome),
+      telefone: toStr(x.telefone),
+      unidade: toStr(x.unidade),
+      situacao: toStr(x.situacao) || 'Ativo'
+    })).filter(
+      (x: MoradorItem) => x.nome !== '' && x.situacao !== 'Inativo'
+    );
+
+    const codigosCadastrados = new Set(
+      moradoresCadastrados
+        .map((x) => toStr(x.codigo))
+        .filter(Boolean)
+    );
+    const nomesCadastrados = new Set(
+      moradoresCadastrados
+        .map((x) => toLower(x.nome))
+        .filter(Boolean)
+    );
+
+    const mapaUnidades = new Map<string, string>();
+    moradoresCadastrados.forEach((x) => {
+      const u = toStr(x.unidade);
+      const cod = toStr(x.codigo);
+      const nome = toLower(x.nome);
+      if (u) {
+        if (cod) mapaUnidades.set(cod, u);
+        if (nome) mapaUnidades.set(nome, u);
+      }
+    });
+
+    // Se houver lista de moradores cadastrados, exibir APENAS moradores cadastrados nas pendências e pagamentos
+    let rawPendentes: PendenteItem[] = (c.pendentes || []).map((p: any) => ({
+      ...p,
+      codigo: toStr(p.codigo),
+      morador: toStr(p.morador),
+      telefone: toStr(p.telefone),
+      saldo: typeof p.saldo === 'number' ? formatBRL(p.saldo) : toStr(p.saldo),
+      vencimento: toStr(p.vencimento),
+      unidade: toStr(p.unidade)
+    }));
+
+    let rawPagos: PagoItem[] = (c.pagos || []).map((p: any) => ({
+      ...p,
+      codigo: toStr(p.codigo),
+      morador: toStr(p.morador),
+      telefone: toStr(p.telefone),
+      valor_pago: typeof p.valor_pago === 'number' ? formatBRL(p.valor_pago) : toStr(p.valor_pago),
+      data_pagamento: toStr(p.data_pagamento),
+      forma_pagamento: toStr(p.forma_pagamento),
+      unidade: toStr(p.unidade)
+    }));
+
+    let pendentesFiltrados: PendenteItem[] = rawPendentes;
+    let pagosFiltrados: PagoItem[] = rawPagos;
+
+    if (moradoresCadastrados.length > 0) {
+      pendentesFiltrados = pendentesFiltrados
+        .filter((p) => {
+          const cod = toStr(p.codigo);
+          const nome = toLower(p.morador);
+          return (cod && codigosCadastrados.has(cod)) || (nome && nomesCadastrados.has(nome));
+        })
+        .map((p) => {
+          const cod = toStr(p.codigo);
+          const nome = toLower(p.morador);
+          return {
+            ...p,
+            codigo: cod,
+            unidade: p.unidade || mapaUnidades.get(cod) || mapaUnidades.get(nome) || ''
+          };
+        });
+
+      pagosFiltrados = pagosFiltrados
+        .filter((p) => {
+          const cod = toStr(p.codigo);
+          const nome = toLower(p.morador);
+          return (cod && codigosCadastrados.has(cod)) || (nome && nomesCadastrados.has(nome));
+        })
+        .map((p) => {
+          const cod = toStr(p.codigo);
+          const nome = toLower(p.morador);
+          return {
+            ...p,
+            codigo: cod,
+            unidade: p.unidade || mapaUnidades.get(cod) || mapaUnidades.get(nome) || ''
+          };
+        });
+    }
+
+    const totalPagoNum = pagosFiltrados.reduce((acc, cur) => acc + parseVal(cur.valor_pago), 0);
+    const totalPendenteNum = pendentesFiltrados.reduce((acc, cur) => acc + parseVal(cur.saldo), 0);
+    const totalPrevistoNum = totalPagoNum + totalPendenteNum;
+
     return {
-      competencia: c.competencia || '',
-      total_moradores: c.total_moradores || 0,
-      qtd_pagos: c.qtd_pagos || 0,
-      qtd_pendentes: c.qtd_pendentes || 0,
-      total_previsto: c.total_previsto || 'R$ 0,00',
-      total_pago: c.total_pago || 'R$ 0,00',
-      total_pendente: c.total_pendente || 'R$ 0,00',
-      pagos: c.pagos || [],
-      pendentes: c.pendentes || [],
-      moradores: m.moradores || []
+      competencia: toStr(c.competencia),
+      total_moradores: moradoresCadastrados.length > 0 ? moradoresCadastrados.length : (c.total_moradores || 0),
+      qtd_pagos: pagosFiltrados.length,
+      qtd_pendentes: pendentesFiltrados.length,
+      total_previsto: formatBRL(totalPrevistoNum),
+      total_pago: formatBRL(totalPagoNum),
+      total_pendente: formatBRL(totalPendenteNum),
+      pagos: pagosFiltrados,
+      pendentes: pendentesFiltrados,
+      moradores: moradoresCadastrados.length > 0 ? moradoresCadastrados : (m.moradores || [])
     };
   }
 
@@ -261,10 +438,38 @@ export class CobradorApi {
       const store = loadDemoStore();
       return store.historico[codigo] || [];
     }
-    const params = new URLSearchParams({ acao: 'historico', chave: this.cfg.key, codigo });
-    const res = await fetch(`${this.cfg.url}?${params.toString()}`);
-    const json = await res.json();
-    return json.historico || [];
+    const res = await callRemoteApi(this.cfg, 'historico', undefined, { codigo });
+    return res.historico || [];
+  }
+
+  async marcar(params: {
+    linha?: number;
+    codigo?: string;
+    resultado: 'ENVIADO' | 'ADIAR_1_DIA' | 'PAGO' | 'ERRO';
+    observacao?: string;
+  }): Promise<void> {
+    if (this.isUsingDemo()) {
+      if (params.codigo) {
+        const store = loadDemoStore();
+        if (!store.historico[params.codigo]) {
+          store.historico[params.codigo] = [];
+        }
+        store.historico[params.codigo].unshift({
+          data: new Date().toLocaleString('pt-BR'),
+          resultado: params.resultado,
+          observacao: params.observacao || 'Marcado via Cobrador Mobile'
+        });
+        saveDemoStore(store);
+      }
+      return;
+    }
+    if (params.linha) {
+      await callRemoteApi(this.cfg, 'marcar', {
+        linha: params.linha,
+        resultado: params.resultado,
+        observacao: params.observacao || 'Cobrador Mobile v8.2'
+      });
+    }
   }
 
   async registrarPagamento(params: {
@@ -356,6 +561,7 @@ export class CobradorApi {
     nome: string;
     telefone: string;
     situacao: string;
+    unidade?: string;
   }): Promise<void> {
     if (this.isUsingDemo()) {
       const store = loadDemoStore();
@@ -365,7 +571,8 @@ export class CobradorApi {
           ...store.moradores[existingIdx],
           nome: params.nome,
           telefone: params.telefone,
-          situacao: params.situacao
+          situacao: params.situacao,
+          unidade: params.unidade || store.moradores[existingIdx].unidade
         };
       } else {
         store.moradores.push({
@@ -373,7 +580,8 @@ export class CobradorApi {
           codigo: params.codigo || String(100 + store.moradores.length + 1),
           nome: params.nome,
           telefone: params.telefone,
-          situacao: params.situacao
+          situacao: params.situacao,
+          unidade: params.unidade
         });
       }
       saveDemoStore(store);
@@ -425,10 +633,8 @@ export class CobradorApi {
       return { ano: anoAtual, meses };
     }
 
-    const params = new URLSearchParams({ acao: 'anual', chave: this.cfg.key, ano: String(anoAtual) });
-    const res = await fetch(`${this.cfg.url}?${params.toString()}`);
-    const json = await res.json();
-    return json;
+    const res = await callRemoteApi(this.cfg, 'anual', undefined, { ano: String(anoAtual) });
+    return res;
   }
 
   async backup(): Promise<{ ok: boolean; nome: string }> {

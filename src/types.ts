@@ -7,6 +7,8 @@ export interface PendenteItem {
   vencimento: string;
   mensagem?: string;
   prioridade?: number;
+  unidade?: string;
+  enviadoHoje?: boolean;
 }
 
 export interface PagoItem {
@@ -17,6 +19,7 @@ export interface PagoItem {
   valor_pago: string;
   data_pagamento: string;
   forma_pagamento: string;
+  unidade?: string;
 }
 
 export interface MoradorItem {
@@ -25,6 +28,7 @@ export interface MoradorItem {
   nome: string;
   telefone: string;
   situacao: 'Ativo' | 'Inativo' | string;
+  unidade?: string;
 }
 
 export interface HistoricoItem {
@@ -58,7 +62,17 @@ export interface Templates {
 export interface AppConfig {
   url: string;
   key: string;
+  pixKey?: string;
+  nomeAssociacao?: string;
   isDemo?: boolean;
+}
+
+export interface OfflineAction {
+  id: string;
+  type: 'pagamento' | 'marcar' | 'morador';
+  payload: any;
+  timestamp: number;
+  descricao: string;
 }
 
 export interface DashboardData {

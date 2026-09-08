@@ -4,8 +4,12 @@ import {
   CalendarClock,
   CloudUpload,
   Download,
+  FileText,
   Mail,
-  Settings
+  RefreshCw,
+  Settings,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 
 interface MaisViewProps {
@@ -15,6 +19,10 @@ interface MaisViewProps {
   onDailyBackup: () => void;
   onExportCSV: () => void;
   onOpenSettings: () => void;
+  onMonthlyReport?: () => void;
+  offlineCount?: number;
+  onSyncOffline?: () => void;
+  isOnline?: boolean;
 }
 
 export const MaisView: React.FC<MaisViewProps> = ({
@@ -23,11 +31,68 @@ export const MaisView: React.FC<MaisViewProps> = ({
   onBackup,
   onDailyBackup,
   onExportCSV,
-  onOpenSettings
+  onOpenSettings,
+  onMonthlyReport,
+  offlineCount = 0,
+  onSyncOffline,
+  isOnline = true
 }) => {
   return (
     <section id="mais-view" className="space-y-4 pb-24">
+      {/* Network / Offline Queue Banner */}
+      <div className="bg-white border border-[#d6e0ea] rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              isOnline ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+            }`}
+          >
+            {isOnline ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
+          </div>
+          <div>
+            <strong className="block text-xs font-bold text-[#172033]">
+              {isOnline ? 'Dispositivo Online' : 'Modo Offline Ativo'}
+            </strong>
+            <span className="text-[11px] text-[#68778a]">
+              {offlineCount > 0
+                ? `${offlineCount} ação(ões) pendente(s) de envio`
+                : 'Todas as ações estão sincronizadas'}
+            </span>
+          </div>
+        </div>
+
+        {offlineCount > 0 && onSyncOffline && (
+          <button
+            onClick={onSyncOffline}
+            className="bg-[#1769aa] hover:bg-[#125a96] text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sincronizar</span>
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {onMonthlyReport && (
+          <button
+            id="btn-menu-monthly-report"
+            onClick={onMonthlyReport}
+            className="bg-white hover:bg-slate-50 text-[#173a5e] border border-blue-200 rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm transition-all cursor-pointer ring-1 ring-blue-100"
+          >
+            <div className="w-11 h-11 rounded-xl bg-blue-100/70 text-[#1769aa] flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <strong className="block text-sm font-bold text-[#172033]">
+                Relatório Mensal (PDF)
+              </strong>
+              <span className="text-xs text-[#68778a]">
+                Balanço com arrecadação e pendências
+              </span>
+            </div>
+          </button>
+        )}
+
         <button
           id="btn-menu-annual"
           onClick={onLoadAnnual}
@@ -108,7 +173,7 @@ export const MaisView: React.FC<MaisViewProps> = ({
           </div>
           <div>
             <strong className="block text-sm font-bold text-[#172033]">Configuração</strong>
-            <span className="text-xs text-[#68778a]">Conexão Google Apps Script</span>
+            <span className="text-xs text-[#68778a]">Chave PIX, Associação e Conexão</span>
           </div>
         </button>
       </div>

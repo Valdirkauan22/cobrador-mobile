@@ -10,11 +10,82 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '25mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
   // Health route
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', app: 'Cobrador Mobile' });
+  });
+
+  // Google Sheets Proxy GET
+  app.get('/api/sheets', async (req, res) => {
+    try {
+      const targetUrl = req.query.url as string;
+      if (!targetUrl) {
+        return res.status(400).json({ ok: false, erro: 'Parâmetro url é obrigatório' });
+      }
+
+      const urlObj = new URL(targetUrl);
+      for (const [key, value] of Object.entries(req.query)) {
+        if (key !== 'url' && typeof value === 'string') {
+          urlObj.searchParams.set(key, value);
+        }
+      }
+
+      const response = await fetch(urlObj.toString(), {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json, text/plain, */*',
+          'User-Agent': 'CobradorMobile/8.2',
+        },
+        redirect: 'follow',
+      });
+
+      const text = await response.text();
+      try {
+        const json = JSON.parse(text);
+        return res.json(json);
+      } catch {
+        return res.send(text);
+      }
+    } catch (err: any) {
+      console.error('Erro no proxy GET /api/sheets:', err);
+      return res.status(500).json({ ok: false, erro: err.message || 'Erro ao conectar com Google Apps Script' });
+    }
+  });
+
+  // Google Sheets Proxy POST
+  app.post('/api/sheets', async (req, res) => {
+    try {
+      const { url: targetUrl, ...payload } = req.body;
+      if (!targetUrl) {
+        return res.status(400).json({ ok: false, erro: 'Parâmetro url é obrigatório' });
+      }
+
+      // Google Apps Script doPost parses JSON from postData.contents or text/plain
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+          'Accept': 'application/json, text/plain, */*',
+          'User-Agent': 'CobradorMobile/8.2',
+        },
+        body: JSON.stringify(payload),
+        redirect: 'follow',
+      });
+
+      const text = await response.text();
+      try {
+        const json = JSON.parse(text);
+        return res.json(json);
+      } catch {
+        return res.send(text);
+      }
+    } catch (err: any) {
+      console.error('Erro no proxy POST /api/sheets:', err);
+      return res.status(500).json({ ok: false, erro: err.message || 'Erro ao conectar com Google Apps Script' });
+    }
   });
 
   // Vite middleware in development vs static dist for production
@@ -27,7 +98,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
+    app.get('*all', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

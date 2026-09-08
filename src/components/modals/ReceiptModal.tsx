@@ -8,6 +8,7 @@ interface ReceiptModalProps {
   isOpen: boolean;
   item: PagoItem | null;
   competencia: string;
+  nomeAssociacao?: string;
   onClose: () => void;
   onNotify: (msg: string) => void;
 }
@@ -16,22 +17,23 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   isOpen,
   item,
   competencia,
+  nomeAssociacao = 'Associação de Moradores',
   onClose,
   onNotify
 }) => {
   if (!item) return null;
 
   const handleDownload = () => {
-    downloadReceipt(item, competencia);
+    downloadReceipt(item, competencia, nomeAssociacao);
     onNotify('Recibo PDF baixado com sucesso.');
   };
 
   const handleShare = async () => {
-    await shareOrDownloadReceipt(item, competencia, onNotify);
+    await shareOrDownloadReceipt(item, competencia, onNotify, nomeAssociacao);
   };
 
   const handleWhatsAppOnly = () => {
-    const msg = `Olá ${item.morador}, confirmamos o recebimento da contribuição referente a ${competencia}, no valor de ${item.valor_pago} via ${item.forma_pagamento}. A Associação de Moradores agradece sua colaboração!`;
+    const msg = `Olá ${item.morador}${item.unidade ? ` (${item.unidade})` : ''}, confirmamos o recebimento da contribuição referente a ${competencia}, no valor de ${item.valor_pago} via ${item.forma_pagamento}. A ${nomeAssociacao} agradece sua colaboração!`;
     openWhatsApp(item.telefone, msg);
   };
 
@@ -42,7 +44,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         <div className="bg-[#f8fafc] border border-slate-200 rounded-2xl p-5 shadow-inner">
           <div className="text-center pb-3 border-b border-dashed border-slate-300">
             <span className="text-xs uppercase font-bold tracking-wider text-slate-500">
-              Associação de Moradores
+              {nomeAssociacao}
             </span>
             <h3 className="text-lg font-black text-[#123b66] mt-0.5">RECIBO DE PAGAMENTO</h3>
           </div>
@@ -52,6 +54,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               <span className="text-slate-500">Morador:</span>
               <strong className="text-slate-900 font-bold text-right">{item.morador}</strong>
             </div>
+            {item.unidade && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Unidade:</span>
+                <strong className="text-slate-900 font-semibold">{item.unidade}</strong>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-slate-500">Código do Morador:</span>
               <strong className="text-slate-900">{item.codigo}</strong>
