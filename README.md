@@ -43,3 +43,7 @@ Para o campo **Unidade**, use a coluna E da aba `Moradores` com o cabeçalho `Un
 ## Instalar no Android
 
 Abra o endereço publicado no Chrome, acesse o menu e escolha **Instalar aplicativo** ou **Adicionar à tela inicial**.
+
+## APK Android
+
+O projeto inclui Capacitor e a pasta nativa `android/`. Cada envio para `main` executa o workflow **Gerar APK Android**. O APK fica disponível em **Actions > execução mais recente > Artifacts > Cobrador-Mobile-APK**.

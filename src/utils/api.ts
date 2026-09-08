@@ -8,6 +8,7 @@ import {
   PendenteItem,
   Templates
 } from '../types';
+import { Capacitor } from '@capacitor/core';
 
 export function formatBRL(v: number): string {
   const parts = Number(v || 0).toFixed(2).split('.');
@@ -186,24 +187,26 @@ async function callRemoteApi(
 
   let response: Response;
   if (body) {
-    response = await fetch('/api/sheets', {
+    const native = Capacitor.isNativePlatform();
+    response = await fetch(native ? cfg.url : '/api/sheets', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': native ? 'text/plain;charset=utf-8' : 'application/json' },
       body: JSON.stringify({
-        url: cfg.url,
+        ...(native ? {} : { url: cfg.url }),
         acao: action,
         chave: cfg.key,
         ...body
       })
     });
   } else {
+    const native = Capacitor.isNativePlatform();
     const params = new URLSearchParams({
-      url: cfg.url,
+      ...(native ? {} : { url: cfg.url }),
       acao: action,
       chave: cfg.key,
       ...(queryParams || {})
     });
-    response = await fetch(`/api/sheets?${params.toString()}`);
+    response = await fetch(`${native ? cfg.url : '/api/sheets'}?${params.toString()}`);
   }
 
   if (!response.ok) {
