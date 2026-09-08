@@ -34,6 +34,10 @@ import { ReceiptModal } from './components/modals/ReceiptModal';
 import { TemplatesModal } from './components/modals/TemplatesModal';
 import { AnnualModal } from './components/modals/AnnualModal';
 import { SettingsModal } from './components/modals/SettingsModal';
+import { SecurityModal } from './components/modals/SecurityModal';
+import { LockScreen } from './components/LockScreen';
+import { configureBillingNotifications, checkLatestRelease } from './utils/native';
+import { App as CapacitorApp } from '@capacitor/app';
 
 export const App: React.FC = () => {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
@@ -76,6 +80,10 @@ export const App: React.FC = () => {
   const [receiptItem, setReceiptItem] = useState<PagoItem | null>(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
   const [isAnnualOpen, setIsAnnualOpen] = useState<boolean>(false);
+  const [isSecurityOpen, setIsSecurityOpen] = useState(false);
+  const [isLocked, setIsLocked] = useState(() => !!loadConfig().pinHash);
+  const [monthClosed, setMonthClosed] = useState(false);
+  const backgroundAt = React.useRef<number | null>(null);
 
   const api = useMemo(() => new CobradorApi(config), [config]);
   const newOperationId = () =>
@@ -161,6 +169,19 @@ export const App: React.FC = () => {
   useEffect(() => {
     refreshAll();
   }, [refreshAll]);
+
+  useEffect(() => {
+    let handle: { remove: () => Promise<void> } | undefined;
+    CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) backgroundAt.current = Date.now();
+      else if (config.pinHash && backgroundAt.current && Date.now() - backgroundAt.current > (config.lockTimeoutMinutes || 5) * 60000) setIsLocked(true);
+    }).then(h => { handle = h; });
+    return () => { handle?.remove(); };
+  }, [config.pinHash, config.lockTimeoutMinutes]);
+
+  useEffect(() => {
+    if (!api.isUsingDemo()) api.getClosingStatus().then(x => setMonthClosed(x.fechado)).catch(()=>{});
+  }, [api, dashboard.competencia]);
 
   // Handle Save Settings
   const handleSaveSettings = async (newCfg: AppConfig) => {
@@ -432,6 +453,38 @@ export const App: React.FC = () => {
     showToast('Relação CSV exportada com sucesso.');
   };
 
+  const handleNotifications = async () => {
+    const next = !config.notificationsEnabled;
+    const enabled = await configureBillingNotifications(next);
+    const updated = { ...config, notificationsEnabled: enabled };
+    saveConfig(updated); setConfig(updated);
+    showToast(enabled ? 'Notificações mensais ativadas às 08:00.' : next ? 'Permissão de notificações não concedida.' : 'Notificações desativadas.');
+  };
+
+  const handleClosing = async () => {
+    const text = monthClosed ? 'Reabrir esta competência e permitir alterações?' : 'Fechar esta competência? Pagamentos ficarão bloqueados até a reabertura.';
+    if (!window.confirm(text)) return;
+    try { const status = await api.setMonthClosed(!monthClosed); setMonthClosed(status.fechado); showToast(status.fechado ? 'Competência fechada com segurança.' : 'Competência reaberta.'); }
+    catch (e:any) { alert((e.message || e) + '\n\nAtualize também o Backend_Planilha_v8_2.gs para utilizar esta função.'); }
+  };
+
+  const handleRestore = async () => {
+    try {
+      const backups = await api.getBackups();
+      if (!backups.length) return alert('Nenhum backup encontrado.');
+      const options = backups.slice(0,10).map((b,i)=>`${i+1}. ${b.nome} — ${b.data}`).join('\n');
+      const chosen = Number(window.prompt(`Escolha o número do backup para criar uma cópia recuperada:\n\n${options}`));
+      if (!chosen || !backups[chosen-1]) return;
+      if (!confirm(`Criar cópia recuperada de "${backups[chosen-1].nome}"? A planilha atual não será sobrescrita.`)) return;
+      const result = await api.restoreBackup(backups[chosen-1].id); showToast(`Cópia criada: ${result.nome}`); if(result.url && confirm('Abrir a cópia recuperada?')) window.open(result.url,'_blank');
+    } catch(e:any) { alert((e.message||e)+'\n\nAtualize também o Backend_Planilha_v8_2.gs.'); }
+  };
+
+  const handleCheckUpdate = async () => {
+    try { const r = await checkLatestRelease('1.3.0'); if(r.available && r.url) { if(confirm(`Nova versão ${r.version} disponível. Abrir página de atualização?`)) window.open(r.url,'_blank'); } else showToast('Você já está usando a versão mais recente.'); }
+    catch(e:any){ showToast(e.message || 'Falha ao verificar atualização.'); }
+  };
+
   return (
     <div className="app-shell bg-[#eef3f8] flex flex-col selection:bg-[#1769aa] selection:text-white">
       {/* Header */}
@@ -510,6 +563,13 @@ export const App: React.FC = () => {
             offlineCount={offlineCount}
             onSyncOffline={processOfflineQueue}
             isOnline={isOnline}
+            onSecurity={() => setIsSecurityOpen(true)}
+            onNotifications={handleNotifications}
+            onRestore={handleRestore}
+            onClosing={handleClosing}
+            onCheckUpdate={handleCheckUpdate}
+            monthClosed={monthClosed}
+            notificationsEnabled={!!config.notificationsEnabled}
           />
         )}
       </main>
@@ -585,6 +645,8 @@ export const App: React.FC = () => {
         onUseDemo={handleUseDemo}
         onSyncOffline={processOfflineQueue}
       />
+      <SecurityModal isOpen={isSecurityOpen} config={config} onClose={()=>setIsSecurityOpen(false)} onSave={(next)=>{saveConfig(next);setConfig(next);showToast('Proteção atualizada.');}} />
+      {isLocked && config.pinHash && <LockScreen pinHash={config.pinHash} biometrics={config.biometricsEnabled} onUnlock={()=>setIsLocked(false)} />}
     </div>
   );
 };

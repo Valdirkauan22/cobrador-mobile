@@ -8,6 +8,7 @@ import {
   PendenteItem,
   Templates
 } from '../types';
+import type { BackupItem, ClosingStatus } from '../types';
 import { Capacitor } from '@capacitor/core';
 
 export function formatBRL(v: number): string {
@@ -650,6 +651,27 @@ export class CobradorApi {
       return { ok: true, nome: `Backup_Local_${new Date().toISOString().slice(0, 10)}.json` };
     }
     return callRemoteApi(this.cfg, 'backup');
+  }
+
+  async getBackups(): Promise<BackupItem[]> {
+    if (this.isUsingDemo()) return [];
+    const res = await callRemoteApi(this.cfg, 'backups');
+    return res.backups || [];
+  }
+
+  async restoreBackup(id: string): Promise<{ ok: boolean; nome: string; url?: string }> {
+    if (this.isUsingDemo()) return { ok: true, nome: 'Cópia de recuperação demonstrativa' };
+    return callRemoteApi(this.cfg, 'restaurar_backup', { id });
+  }
+
+  async getClosingStatus(): Promise<ClosingStatus> {
+    if (this.isUsingDemo()) return { competencia: loadDemoStore().competencia, fechado: false };
+    return callRemoteApi(this.cfg, 'fechamento');
+  }
+
+  async setMonthClosed(fechar: boolean): Promise<ClosingStatus> {
+    if (this.isUsingDemo()) return { competencia: loadDemoStore().competencia, fechado: fechar };
+    return callRemoteApi(this.cfg, fechar ? 'fechar_mes' : 'reabrir_mes', {});
   }
 
   async ativarBackup(): Promise<{ ok: boolean; mensagem: string }> {

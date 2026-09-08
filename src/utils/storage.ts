@@ -16,7 +16,9 @@ export function loadConfig(): AppConfig {
         key: DEFAULT_KEY,
         pixKey: '',
         nomeAssociacao: 'Associação de Moradores',
-        isDemo: false
+        isDemo: false,
+        notificationsEnabled: false,
+        lockTimeoutMinutes: 5
       };
     }
     const parsed = JSON.parse(raw);
@@ -29,7 +31,11 @@ export function loadConfig(): AppConfig {
       key,
       pixKey: parsed.pixKey || '',
       nomeAssociacao: parsed.nomeAssociacao || 'Associação de Moradores',
-      isDemo
+      isDemo,
+      pinHash: parsed.pinHash || '',
+      biometricsEnabled: !!parsed.biometricsEnabled,
+      notificationsEnabled: !!parsed.notificationsEnabled,
+      lockTimeoutMinutes: Number(parsed.lockTimeoutMinutes || 5)
     };
   } catch {
     return {
@@ -37,7 +43,9 @@ export function loadConfig(): AppConfig {
       key: DEFAULT_KEY,
       pixKey: '',
       nomeAssociacao: 'Associação de Moradores',
-      isDemo: false
+      isDemo: false,
+      notificationsEnabled: false,
+      lockTimeoutMinutes: 5
     };
   }
 }

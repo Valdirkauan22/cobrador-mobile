@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  ListChecks,
   XCircle
 } from 'lucide-react';
 
@@ -41,16 +42,31 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [sentCodes, setSentCodes] = useState<Set<string>>(new Set());
+  const [unitFilter, setUnitFilter] = useState('');
+  const [stateFilter, setStateFilter] = useState<'todos'|'nao_enviados'|'enviados'|'vencidos'>('todos');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batch, setBatch] = useState<PendenteItem[]>([]);
+  const [batchIndex, setBatchIndex] = useState(0);
+
+  const isOverdue = (value: string) => {
+    const m = String(value || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!m) return false;
+    const end = new Date(Number(m[3]), Number(m[2])-1, Number(m[1]), 23, 59, 59);
+    return end.getTime() < Date.now();
+  };
+  const units = Array.from(new Set(items.map(x=>x.unidade).filter(Boolean) as string[])).sort();
 
   const filtered = items.filter((x) => {
     const q = search.toLowerCase().trim();
-    if (!q) return true;
-    return (
+    const matchesSearch = !q || (
       (x.morador || '').toLowerCase().includes(q) ||
       (x.codigo || '').toLowerCase().includes(q) ||
       (x.telefone || '').includes(q) ||
       (x.unidade || '').toLowerCase().includes(q)
     );
+    const sent = sentCodes.has(x.codigo) || x.enviadoHoje;
+    const matchesState = stateFilter === 'todos' || (stateFilter === 'enviados' && sent) || (stateFilter === 'nao_enviados' && !sent) || (stateFilter === 'vencidos' && isOverdue(x.vencimento));
+    return matchesSearch && (!unitFilter || x.unidade === unitFilter) && matchesState;
   });
 
   const handleCharge = (item: PendenteItem) => {
@@ -81,6 +97,10 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
     navigator.clipboard.writeText(pixKey);
     onNotify?.('Chave PIX copiada para a área de transferência!');
   };
+
+  const toggle = (codigo: string) => setSelected(prev => { const n=new Set(prev); n.has(codigo)?n.delete(codigo):n.add(codigo); return n; });
+  const startBatch = () => { const list=filtered.filter(x=>selected.has(x.codigo)); if(!list.length) return; setBatch(list); setBatchIndex(0); };
+  const sendBatchCurrent = () => { const item=batch[batchIndex]; if(!item)return; handleCharge(item); if(batchIndex<batch.length-1)setBatchIndex(batchIndex+1); else {setBatch([]);setSelected(new Set());onNotify?.('Lote concluído.');} };
 
   return (
     <section id="pendentes-view" className="space-y-3 pb-24">
@@ -115,6 +135,21 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <select value={stateFilter} onChange={e=>setStateFilter(e.target.value as any)} className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"><option value="todos">Todos os pendentes</option><option value="nao_enviados">Ainda não enviados</option><option value="enviados">Já enviados</option><option value="vencidos">Vencidos</option></select>
+        <select value={unitFilter} onChange={e=>setUnitFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"><option value="">Todas as unidades</option>{units.map(u=><option key={u}>{u}</option>)}</select>
+      </div>
+
+      {filtered.length>0 && <div className="bg-white border border-blue-100 rounded-xl p-2.5 flex items-center justify-between gap-2">
+        <button onClick={()=>setSelected(selected.size===filtered.length?new Set():new Set(filtered.map(x=>x.codigo)))} className="text-xs font-bold text-[#1769aa]">{selected.size===filtered.length?'Desmarcar todos':'Selecionar visíveis'}</button>
+        <button onClick={startBatch} disabled={!selected.size} className="bg-[#1769aa] disabled:opacity-40 text-white rounded-lg px-3 py-2 text-xs font-bold flex items-center gap-1.5"><ListChecks className="w-4 h-4"/>Cobrar selecionados ({selected.size})</button>
+      </div>}
+
+      {batch.length>0 && <div className="sticky top-24 z-10 bg-[#0a2540] text-white rounded-2xl p-4 shadow-xl border border-white/10">
+        <p className="text-[11px] text-blue-200 font-bold uppercase">Lote {batchIndex+1} de {batch.length}</p><strong className="block mt-1">{batch[batchIndex]?.morador}</strong><p className="text-xs text-blue-100 mt-1">Abra o WhatsApp, envie a mensagem, volte ao aplicativo e continue.</p>
+        <div className="flex gap-2 mt-3"><button onClick={sendBatchCurrent} className="flex-1 bg-[#1e8e5a] rounded-xl py-2.5 text-xs font-bold">Abrir WhatsApp e avançar</button><button onClick={()=>setBatch([])} className="px-3 bg-white/10 rounded-xl text-xs">Cancelar</button></div>
+      </div>}
 
       {/* PIX Quick Bar if Configured */}
       {pixKey && (
@@ -183,6 +218,7 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
                 className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-xs transition-all hover:shadow-sm"
                 style={{ boxShadow: '0 4px 16px rgba(18, 43, 73, 0.05)' }}
               >
+                <label className="float-left mr-2 mt-1"><input type="checkbox" checked={selected.has(x.codigo)} onChange={()=>toggle(x.codigo)} className="w-4 h-4 accent-[#1769aa]" aria-label={`Selecionar ${x.morador}`} /></label>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
                     {/* Avatar with Initials */}

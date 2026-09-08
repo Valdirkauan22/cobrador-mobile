@@ -70,6 +70,8 @@ function doGet(e) {
     if (p.acao === 'moradores') return out(moradores_());
     if (p.acao === 'templates') return out(templates_());
     if (p.acao === 'anual') return out(anual_(p.ano));
+    if (p.acao === 'backups') return out(backups_());
+    if (p.acao === 'fechamento') return out(fechamento_());
     throw Error('Ação inválida');
   } catch (x) {
     return out({ ok: false, erro: String(x.message || x) });
@@ -87,6 +89,9 @@ function doPost(e) {
     if (p.acao === 'salvar_templates') return out(salvarTemplates_(p));
     if (p.acao === 'backup') return out(backupAgora_());
     if (p.acao === 'ativar_backup') return out(ativarBackup_());
+    if (p.acao === 'restaurar_backup') return out(restaurarBackup_(p));
+    if (p.acao === 'fechar_mes') return out(definirFechamento_(true));
+    if (p.acao === 'reabrir_mes') return out(definirFechamento_(false));
     throw Error('Ação inválida');
   } catch (x) {
     return out({ ok: false, erro: String(x.message || x) });
@@ -301,6 +306,7 @@ function registrarPagamento_(p) {
   lock.waitLock(10000);
   try {
     let x = contextoAtual_(), cod = String(p.codigo || ''), valor = Number(p.valor || 0), forma = forma_(p.forma), data = data_(p.data), obs = String(p.observacao || '').trim(), op = String(p.operacao_id || '').trim();
+    garantirMesAberto_(x);
     if (!cod) throw Error('Morador inválido.');
     if (!(valor > 0)) throw Error('O valor deve ser maior que zero.');
     if (!forma) throw Error('Forma de pagamento inválida.');
@@ -454,7 +460,43 @@ function anual_(ano) {
 function backupAgora_() {
   let arq = DriveApp.getFileById(planilhaId_()), nome = 'Backup_Associacao_' + Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd_HH-mm');
   let copia = arq.makeCopy(nome);
+  PropertiesService.getScriptProperties().setProperties({ ULTIMO_BACKUP_NOME: copia.getName(), ULTIMO_BACKUP_DATA: new Date().toISOString() });
   return { ok: true, nome: copia.getName(), url: copia.getUrl() };
+}
+
+function chaveFechamento_(x) {
+  let comp = x && x.dados && x.dados.length ? ck(x.dados[0].row[1]) : Utilities.formatDate(new Date(), FUSO, 'yyyy-MM');
+  return 'MES_FECHADO_' + comp;
+}
+
+function garantirMesAberto_(x) {
+  if (PropertiesService.getScriptProperties().getProperty(chaveFechamento_(x)) === 'true') throw Error('Esta competência está fechada. Reabra o mês antes de alterar pagamentos.');
+}
+
+function fechamento_() {
+  let x = contextoAtual_(), chave = chaveFechamento_(x), p = PropertiesService.getScriptProperties(), comp = x.dados.length ? ct(x.dados[0].row[1]) : '';
+  return { ok: true, competencia: comp, fechado: p.getProperty(chave) === 'true', fechado_em: p.getProperty(chave + '_EM') || '' };
+}
+
+function definirFechamento_(fechar) {
+  let x = contextoAtual_(), chave = chaveFechamento_(x), p = PropertiesService.getScriptProperties();
+  if (fechar) p.setProperties((function(){ let o={}; o[chave]='true'; o[chave+'_EM']=dh(new Date()); return o; })());
+  else { p.deleteProperty(chave); p.deleteProperty(chave + '_EM'); }
+  return fechamento_();
+}
+
+function backups_() {
+  let z = [], it = DriveApp.searchFiles("title contains 'Backup_Associacao_' and trashed = false");
+  while (it.hasNext() && z.length < 20) { let f = it.next(); z.push({ id: f.getId(), nome: f.getName(), data: dh(f.getDateCreated()), url: f.getUrl() }); }
+  z.sort(function(a,b){ return String(b.data).localeCompare(String(a.data)); });
+  return { ok: true, backups: z };
+}
+
+/* Cria uma cópia recuperada sem sobrescrever a planilha em produção. */
+function restaurarBackup_(p) {
+  let id = String(p.id || '').trim(); if (!id) throw Error('Backup inválido.');
+  let f = DriveApp.getFileById(id), nome = 'RECUPERADO_' + Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd_HH-mm') + '_' + f.getName();
+  let copia = f.makeCopy(nome); return { ok: true, nome: copia.getName(), url: copia.getUrl() };
 }
 
 function executarBackupDiario() { backupAgora_(); }

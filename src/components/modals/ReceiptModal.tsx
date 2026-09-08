@@ -22,6 +22,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   onNotify
 }) => {
   if (!item) return null;
+  const reciboNumero = `${String(competencia || '').replace(/\D/g, '')}-${item.codigo}-${String(item.data_pagamento || '').replace(/\D/g, '').slice(0, 8)}`;
 
   const handleDownload = () => {
     downloadReceipt(item, competencia, nomeAssociacao);
@@ -47,6 +48,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               {nomeAssociacao}
             </span>
             <h3 className="text-lg font-black text-[#123b66] mt-0.5">RECIBO DE PAGAMENTO</h3>
+            <p className="text-[10px] text-slate-500 mt-1">Nº {reciboNumero}</p>
           </div>
 
           <div className="py-4 space-y-2.5 text-xs text-slate-700">

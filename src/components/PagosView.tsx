@@ -32,16 +32,20 @@ export const PagosView: React.FC<PagosViewProps> = ({
   isLoading
 }) => {
   const [search, setSearch] = useState('');
+  const [unitFilter, setUnitFilter] = useState('');
+  const [methodFilter, setMethodFilter] = useState('');
+  const units = Array.from(new Set(items.map(x=>x.unidade).filter(Boolean) as string[])).sort();
+  const methods = Array.from(new Set(items.map(x=>x.forma_pagamento).filter(Boolean))).sort();
 
   const filtered = items.filter((x) => {
     const q = search.toLowerCase().trim();
-    if (!q) return true;
-    return (
+    const matchesSearch = !q || (
       (x.morador || '').toLowerCase().includes(q) ||
       (x.codigo || '').toLowerCase().includes(q) ||
       (x.telefone || '').includes(q) ||
       (x.unidade || '').toLowerCase().includes(q)
     );
+    return matchesSearch && (!unitFilter || x.unidade===unitFilter) && (!methodFilter || x.forma_pagamento===methodFilter);
   });
 
   return (
@@ -76,6 +80,10 @@ export const PagosView: React.FC<PagosViewProps> = ({
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <select value={methodFilter} onChange={e=>setMethodFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"><option value="">Todas as formas</option>{methods.map(m=><option key={m}>{m}</option>)}</select>
+        <select value={unitFilter} onChange={e=>setUnitFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"><option value="">Todas as unidades</option>{units.map(u=><option key={u}>{u}</option>)}</select>
       </div>
 
       {/* Info indicator */}

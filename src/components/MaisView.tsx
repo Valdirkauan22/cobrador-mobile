@@ -10,6 +10,7 @@ import {
   Settings,
   Wifi,
   WifiOff
+  ,ShieldCheck, BellRing, LockKeyhole, RotateCcw, Smartphone
 } from 'lucide-react';
 
 interface MaisViewProps {
@@ -23,6 +24,13 @@ interface MaisViewProps {
   offlineCount?: number;
   onSyncOffline?: () => void;
   isOnline?: boolean;
+  onSecurity: () => void;
+  onNotifications: () => void;
+  onRestore: () => void;
+  onClosing: () => void;
+  onCheckUpdate: () => void;
+  monthClosed?: boolean;
+  notificationsEnabled?: boolean;
 }
 
 export const MaisView: React.FC<MaisViewProps> = ({
@@ -35,7 +43,9 @@ export const MaisView: React.FC<MaisViewProps> = ({
   onMonthlyReport,
   offlineCount = 0,
   onSyncOffline,
-  isOnline = true
+  isOnline = true,
+  onSecurity, onNotifications, onRestore, onClosing, onCheckUpdate,
+  monthClosed = false, notificationsEnabled = false
 }) => {
   return (
     <section id="mais-view" className="space-y-4 pb-24">
@@ -73,6 +83,11 @@ export const MaisView: React.FC<MaisViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button onClick={onSecurity} className="bg-white border border-[#d6e0ea] rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm"><div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center"><ShieldCheck className="w-5 h-5"/></div><div><strong className="block text-sm">Segurança e biometria</strong><span className="text-xs text-[#68778a]">PIN, biometria e bloqueio automático</span></div></button>
+        <button onClick={onNotifications} className="bg-white border border-[#d6e0ea] rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm"><div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><BellRing className="w-5 h-5"/></div><div><strong className="block text-sm">Notificações {notificationsEnabled?'ativas':'desativadas'}</strong><span className="text-xs text-[#68778a]">Lembrete, vencimento e cobrança</span></div></button>
+        <button onClick={onClosing} className={`border rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm ${monthClosed?'bg-rose-50 border-rose-200':'bg-white border-[#d6e0ea]'}`}><div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><LockKeyhole className="w-5 h-5"/></div><div><strong className="block text-sm">{monthClosed?'Mês fechado':'Fechar competência'}</strong><span className="text-xs text-[#68778a]">{monthClosed?'Toque para reabrir':'Bloquear alterações após conferência'}</span></div></button>
+        <button onClick={onRestore} className="bg-white border border-[#d6e0ea] rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm"><div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center"><RotateCcw className="w-5 h-5"/></div><div><strong className="block text-sm">Recuperar backup</strong><span className="text-xs text-[#68778a]">Criar uma cópia recuperada segura</span></div></button>
+        <button onClick={onCheckUpdate} className="bg-white border border-[#d6e0ea] rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm"><div className="w-11 h-11 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center"><Smartphone className="w-5 h-5"/></div><div><strong className="block text-sm">Atualização do aplicativo</strong><span className="text-xs text-[#68778a]">Verificar uma nova versão</span></div></button>
         {onMonthlyReport && (
           <button
             id="btn-menu-monthly-report"

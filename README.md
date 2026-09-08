@@ -1,15 +1,20 @@
 # Cobrador Mobile — Web App/PWA
 
+Versão atual: **1.3.0**
+
 Aplicativo web moderno e responsivo em **React (TypeScript + Vite + Tailwind CSS)** para gestão de mensalidades e controle de cobranças de Associações de Moradores.
 
 O sistema integra-se diretamente com o backend Google Sheets / Google Apps Script (`Backend_Planilha_v8_2.gs`) ou pode ser executado em modo de demonstração local.
 
-> Este repositório não gera APK diretamente. O aplicativo pode ser instalado no Android pelo navegador como PWA.
+O projeto gera PWA e APK Android pelo fluxo automatizado do GitHub Actions.
 
 ## Funcionalidades Principais
 
 - **Painel Geral de Métricas**: Indicadores em tempo real de Moradores, Pagos, A pagar e Total em aberto, além de previsão e arrecadação atual da competência.
 - **A Pagar (Pendentes)**: Busca em tempo real, visualização de débitos e vencimentos, envio rápido de mensagem personalizada de cobrança via WhatsApp, registro completo de pagamentos e histórico.
+- **Cobrança em lote e filtros**: Seleção guiada de moradores, filtros por unidade, vencimento, envio e forma de pagamento.
+- **Segurança**: PIN local, biometria/credencial do aparelho e bloqueio após inatividade.
+- **Operação mensal**: Fechamento/reabertura de competência, recuperação segura de backups e notificações Android.
 - **Pagos**: Busca de pagadores, emissão e compartilhamento de recibo em PDF, anexo local e envio do comprovante para uma pasta segura no Google Drive.
 - **Cadastro de Moradores**: Criação e edição de moradores, códigos, telefones e situação (Ativo / Inativo).
 - **Menu Mais**:

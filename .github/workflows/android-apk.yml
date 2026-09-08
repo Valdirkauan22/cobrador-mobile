@@ -22,6 +22,11 @@ jobs:
           java-version: 21
           cache: gradle
       - uses: android-actions/setup-android@v3
+      - name: Restaurar assinatura Android persistente
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: cobrador-mobile-debug-keystore-v1
       - name: Instalar Android SDK 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Instalar dependências e sincronizar Android
@@ -36,7 +41,7 @@ jobs:
           ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: Cobrador-Mobile-APK
+          name: Cobrador-Mobile-v1.3.0-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

@@ -65,6 +65,23 @@ export interface AppConfig {
   pixKey?: string;
   nomeAssociacao?: string;
   isDemo?: boolean;
+  pinHash?: string;
+  biometricsEnabled?: boolean;
+  notificationsEnabled?: boolean;
+  lockTimeoutMinutes?: number;
+}
+
+export interface BackupItem {
+  id: string;
+  nome: string;
+  data: string;
+  url?: string;
+}
+
+export interface ClosingStatus {
+  competencia: string;
+  fechado: boolean;
+  fechado_em?: string;
 }
 
 export interface OfflineAction {

@@ -10,10 +10,12 @@ export function createPdfBlob(item: PagoItem, competencia: string, nomeAssociaca
   const moradorLinha = item.unidade
     ? `Morador: ${clean(item.morador)} (${clean(item.unidade)})`
     : `Morador: ${clean(item.morador)}`;
+  const reciboNumero = `${String(competencia || '').replace(/\D/g, '')}-${clean(item.codigo)}-${String(item.data_pagamento || '').replace(/\D/g, '').slice(0, 8)}`;
 
   const lines = [
     'RECIBO DE CONTRIBUICAO',
     clean(nomeAssociacao || 'Associacao de Moradores'),
+    'Recibo No: ' + reciboNumero,
     '',
     moradorLinha,
     'Codigo: ' + clean(item.codigo),
