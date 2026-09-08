@@ -1,0 +1,14 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#123b66"><meta name="description" content="Gestão móvel de cobranças da Associação de Moradores"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg"><title>Cobrador Mobile</title><link rel="stylesheet" href="style.css"></head><body>
+<header><div><b>Cobrador Mobile</b><small id="competencia">Associação de Moradores</small></div><button class="icon" onclick="openSettings()">⚙</button></header>
+<main>
+ <section id="setup" class="panel hidden"><h2>Conectar à planilha</h2><label>URL do Web App /exec<input id="url" inputmode="url" placeholder="https://script.google.com/.../exec"></label><label>Chave de acesso<input id="key" type="password"></label><button onclick="saveSettings()">SALVAR E CONECTAR</button></section>
+ <section id="app" class="hidden">
+  <div class="cards"><article><span>Moradores</span><strong id="cMor">—</strong></article><article class="good"><span>Pagos</span><strong id="cPag">—</strong></article><article class="warn"><span>A pagar</span><strong id="cPen">—</strong></article><article class="bad"><span>Em aberto</span><strong id="cVal">—</strong></article></div>
+  <nav><button data-view="pendentes" class="active">A pagar</button><button data-view="pagos">Pagos</button><button data-view="moradores">Moradores</button><button data-view="mais">Mais</button></nav>
+  <div id="status" class="status">Atualizando…</div>
+  <section id="pendentes" class="view"><div class="toolbar"><input id="searchP" placeholder="Buscar morador" oninput="renderPendentes()"><button onclick="refreshAll()">↻</button></div><div id="listP" class="list"></div></section>
+  <section id="pagos" class="view hidden"><div class="toolbar"><input id="searchG" placeholder="Buscar pagador" oninput="renderPagos()"><button onclick="refreshAll()">↻</button></div><div id="listG" class="list"></div></section>
+  <section id="moradores" class="view hidden"><button class="wide" onclick="editResident()">＋ NOVO MORADOR</button><div id="listM" class="list"></div></section>
+  <section id="mais" class="view hidden"><div class="menu"><button onclick="loadAnnual()">📊 Painel anual</button><button onclick="editTemplates()">✉️ Mensagens automáticas</button><button onclick="backup()">☁️ Backup agora</button><button onclick="dailyBackup()">🕑 Ativar backup diário</button><button onclick="exportCSV()">⬇️ Exportar relação</button><button onclick="openSettings()">⚙️ Configuração</button></div></section>
+ </section>
+</main><div id="modal" class="modal hidden"><div class="sheet"><button class="close" onclick="closeModal()">×</button><div id="modalBody"></div></div></div><div id="toast"></div><script src="app.js"></script></body></html>
