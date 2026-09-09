@@ -1,4 +1,7 @@
 import { DashboardData, PagoItem } from '../types';
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 export function createPdfBlob(item: PagoItem, competencia: string, nomeAssociacao?: string): Blob {
   const clean = (s: string | undefined | null) =>
@@ -216,6 +219,40 @@ export async function shareOrDownloadReceipt(
   const blob = createPdfBlob(item, competencia, nomeAssociacao);
   const fileName = `recibo_${item.codigo}_${(competencia || '').replace('/', '-')}.pdf`;
   const message = `Olá ${item.morador}, segue o recibo de pagamento da contribuição referente a ${competencia}. Obrigado pela colaboração!`;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+
+      await Filesystem.writeFile({
+        path: fileName,
+        data: btoa(binary),
+        directory: Directory.Cache,
+        recursive: true
+      });
+
+      const saved = await Filesystem.getUri({
+        path: fileName,
+        directory: Directory.Cache
+      });
+
+      await Share.share({
+        title: 'Recibo de pagamento',
+        text: message,
+        files: [saved.uri],
+        dialogTitle: 'Enviar recibo pelo WhatsApp'
+      });
+      return;
+    } catch (err: unknown) {
+      if ((err as Error)?.message?.toLowerCase().includes('cancel')) return;
+      onNotify('Não foi possível anexar automaticamente. O recibo será baixado para envio manual.');
+    }
+  }
 
   try {
     const file = new File([blob], fileName, { type: 'application/pdf' });
