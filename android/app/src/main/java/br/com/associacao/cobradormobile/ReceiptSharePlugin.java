@@ -24,6 +24,7 @@ public class ReceiptSharePlugin extends Plugin {
         String fileName = call.getString("fileName", "recibo.pdf");
         String phone = call.getString("phone", "").replaceAll("\\D", "");
         String message = call.getString("message", "");
+        String whatsappMode = call.getString("whatsappMode", "auto");
 
         if (base64 == null || base64.isEmpty() || phone.isEmpty()) {
             call.reject("Recibo ou telefone inválido.");
@@ -48,9 +49,20 @@ public class ReceiptSharePlugin extends Plugin {
                 receipt
             );
 
+            String selectedPackage = "com.whatsapp";
+            if ("business".equals(whatsappMode)) {
+                selectedPackage = "com.whatsapp.w4b";
+            } else if ("auto".equals(whatsappMode)) {
+                Intent businessCheck = getContext().getPackageManager()
+                    .getLaunchIntentForPackage("com.whatsapp.w4b");
+                Intent standardCheck = getContext().getPackageManager()
+                    .getLaunchIntentForPackage("com.whatsapp");
+                if (standardCheck == null && businessCheck != null) selectedPackage = "com.whatsapp.w4b";
+            }
+
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType("application/pdf");
-            intent.setPackage("com.whatsapp");
+            intent.setPackage(selectedPackage);
             intent.putExtra(Intent.EXTRA_STREAM, uri);
             intent.putExtra(Intent.EXTRA_TEXT, message);
             intent.putExtra("jid", phone + "@s.whatsapp.net");
@@ -58,13 +70,14 @@ public class ReceiptSharePlugin extends Plugin {
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
             if (intent.resolveActivity(getContext().getPackageManager()) == null) {
-                call.reject("WhatsApp não encontrado.");
+                call.reject("O WhatsApp selecionado não foi encontrado.");
                 return;
             }
 
             getActivity().startActivity(intent);
             JSObject result = new JSObject();
             result.put("opened", true);
+            result.put("package", selectedPackage);
             call.resolve(result);
         } catch (Exception error) {
             call.reject("Não foi possível enviar o recibo ao contato.", error);

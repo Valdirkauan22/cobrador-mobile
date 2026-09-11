@@ -36,7 +36,7 @@ import { AnnualModal } from './components/modals/AnnualModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { SecurityModal } from './components/modals/SecurityModal';
 import { LockScreen } from './components/LockScreen';
-import { configureBillingNotifications, checkLatestRelease } from './utils/native';
+import { configureBillingNotifications, checkLatestRelease, APP_VERSION } from './utils/native';
 import { App as CapacitorApp } from '@capacitor/app';
 
 export const App: React.FC = () => {
@@ -128,6 +128,8 @@ export const App: React.FC = () => {
           await api.salvarMorador(action.payload);
         } else if (action.type === 'comprovante') {
           await api.anexarComprovante(action.payload);
+        } else if (action.type === 'marcar') {
+          await api.marcar(action.payload);
         }
         removeOfflineAction(action.id);
         synced++;
@@ -203,7 +205,9 @@ export const App: React.FC = () => {
       key: '',
       pixKey: config.pixKey || '',
       nomeAssociacao: config.nomeAssociacao || 'Associação de Moradores',
-      isDemo: true
+      isDemo: true,
+      operatorName: config.operatorName || '',
+      whatsappMode: config.whatsappMode || 'auto'
     };
     saveConfig(demoCfg);
     setConfig(demoCfg);
@@ -221,6 +225,9 @@ export const App: React.FC = () => {
     if (!paymentItem) return;
 
     let obs = data.observacao;
+    if (config.operatorName) {
+      obs += (obs ? ' — ' : '') + 'Responsável: ' + config.operatorName;
+    }
     let proof: Awaited<ReturnType<typeof saveProofAttachment>> | null = null;
     if (data.file) {
       proof = await saveProofAttachment(paymentItem.codigo, paymentItem.morador, data.file, data.observacao);
@@ -301,13 +308,16 @@ export const App: React.FC = () => {
     if (!proofItem) return;
     const proof = await saveProofAttachment(proofItem.codigo, proofItem.morador, file, observacao);
 
+    const proofObservation = observacao + (config.operatorName
+      ? (observacao ? ' — ' : '') + 'Responsável: ' + config.operatorName
+      : '');
     const payload = {
       codigo: proofItem.codigo,
       morador: proofItem.morador,
       arquivo: file.name,
       arquivo_base64: proof.dataUrl,
       mime_type: proof.tipo,
-      observacao,
+      observacao: proofObservation,
       operacao_id: newOperationId()
     };
 
@@ -353,16 +363,23 @@ export const App: React.FC = () => {
 
   // Quick action: Mark as sent
   const handleMarkSent = async (item: PendenteItem) => {
+    const payload = {
+      linha: item.linha,
+      codigo: item.codigo,
+      resultado: 'ENVIADO',
+      observacao: `Envio confirmado manualmente em ${new Date().toLocaleDateString('pt-BR')}${config.operatorName ? ' por ' + config.operatorName : ''}.`
+    };
     try {
-      await api.marcar({
-        linha: item.linha,
-        codigo: item.codigo,
-        resultado: 'ENVIADO',
-        observacao: `Cobrança enviada via WhatsApp em ${new Date().toLocaleDateString('pt-BR')}`
-      });
+      await api.marcar(payload);
       showToast(`Cobrança de ${item.morador} registrada como enviada.`);
     } catch (err: any) {
-      showToast(`Não foi possível registrar o envio: ${err.message || 'erro desconhecido'}`);
+      if (!api.isUsingDemo() && isNetworkFailure(err)) {
+        addOfflineAction({ type: 'marcar', payload });
+        setOfflineCount(getOfflineQueueCount());
+        showToast('Sem conexão. Confirmação de envio guardada para sincronizar.');
+      } else {
+        showToast(`Não foi possível registrar o envio: ${err.message || 'erro desconhecido'}`);
+      }
     }
   };
 
@@ -481,7 +498,7 @@ export const App: React.FC = () => {
   };
 
   const handleCheckUpdate = async () => {
-    try { const r = await checkLatestRelease('1.3.1'); if(r.available && r.url) { if(confirm(`Nova versão ${r.version} disponível. Abrir página de atualização?`)) window.open(r.url,'_blank'); } else showToast('Você já está usando a versão mais recente.'); }
+    try { const r = await checkLatestRelease(APP_VERSION); if(r.available && r.url) { if(confirm(`Nova versão ${r.version} disponível. Abrir página de atualização?`)) window.open(r.url,'_blank'); } else showToast(`Você já está usando a versão ${APP_VERSION}.`); }
     catch(e:any){ showToast(e.message || 'Falha ao verificar atualização.'); }
   };
 
@@ -570,6 +587,7 @@ export const App: React.FC = () => {
             onCheckUpdate={handleCheckUpdate}
             monthClosed={monthClosed}
             notificationsEnabled={!!config.notificationsEnabled}
+            appVersion={APP_VERSION}
           />
         )}
       </main>
@@ -620,6 +638,8 @@ export const App: React.FC = () => {
         item={receiptItem}
         competencia={dashboard.competencia}
         nomeAssociacao={config.nomeAssociacao}
+        operatorName={config.operatorName}
+        whatsappMode={config.whatsappMode}
         onClose={() => setReceiptItem(null)}
         onNotify={showToast}
       />

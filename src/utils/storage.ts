@@ -18,7 +18,9 @@ export function loadConfig(): AppConfig {
         nomeAssociacao: 'Associação de Moradores',
         isDemo: false,
         notificationsEnabled: false,
-        lockTimeoutMinutes: 5
+        lockTimeoutMinutes: 5,
+        operatorName: '',
+        whatsappMode: 'auto'
       };
     }
     const parsed = JSON.parse(raw);
@@ -35,7 +37,9 @@ export function loadConfig(): AppConfig {
       pinHash: parsed.pinHash || '',
       biometricsEnabled: !!parsed.biometricsEnabled,
       notificationsEnabled: !!parsed.notificationsEnabled,
-      lockTimeoutMinutes: Number(parsed.lockTimeoutMinutes || 5)
+      lockTimeoutMinutes: Number(parsed.lockTimeoutMinutes || 5),
+      operatorName: parsed.operatorName || '',
+      whatsappMode: parsed.whatsappMode || 'auto'
     };
   } catch {
     return {
@@ -45,7 +49,9 @@ export function loadConfig(): AppConfig {
       nomeAssociacao: 'Associação de Moradores',
       isDemo: false,
       notificationsEnabled: false,
-      lockTimeoutMinutes: 5
+      lockTimeoutMinutes: 5,
+      operatorName: '',
+      whatsappMode: 'auto'
     };
   }
 }

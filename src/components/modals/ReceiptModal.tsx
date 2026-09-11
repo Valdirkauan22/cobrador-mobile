@@ -9,6 +9,8 @@ interface ReceiptModalProps {
   item: PagoItem | null;
   competencia: string;
   nomeAssociacao?: string;
+  operatorName?: string;
+  whatsappMode?: 'auto' | 'standard' | 'business';
   onClose: () => void;
   onNotify: (msg: string) => void;
 }
@@ -18,6 +20,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   item,
   competencia,
   nomeAssociacao = 'Associação de Moradores',
+  operatorName,
+  whatsappMode = 'auto',
   onClose,
   onNotify
 }) => {
@@ -25,12 +29,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const reciboNumero = `${String(competencia || '').replace(/\D/g, '')}-${item.codigo}-${String(item.data_pagamento || '').replace(/\D/g, '').slice(0, 8)}`;
 
   const handleDownload = () => {
-    downloadReceipt(item, competencia, nomeAssociacao);
+    downloadReceipt(item, competencia, nomeAssociacao, operatorName);
     onNotify('Recibo PDF baixado com sucesso.');
   };
 
   const handleShare = async () => {
-    await shareOrDownloadReceipt(item, competencia, onNotify, nomeAssociacao);
+    await shareOrDownloadReceipt(
+      item,
+      competencia,
+      onNotify,
+      nomeAssociacao,
+      operatorName,
+      whatsappMode
+    );
   };
 
   const handleWhatsAppOnly = () => {
@@ -87,6 +98,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           <p className="text-[11px] text-center text-slate-500 italic pt-2 border-t border-dashed border-slate-300">
             Recebemos o valor acima referente à contribuição da Associação. Obrigado pela colaboração!
           </p>
+          <div className="mt-3 pt-3 border-t border-dashed border-slate-300 text-center">
+            <p className="text-[10px] text-slate-500">
+              {operatorName ? `Responsável: ${operatorName}` : 'Emitido eletronicamente pelo Cobrador Mobile'}
+            </p>
+            <p className="text-[9px] font-mono text-slate-400 mt-1">
+              Verificação: {reciboNumero.toUpperCase()}
+            </p>
+          </div>
         </div>
 
         {/* Actions */}

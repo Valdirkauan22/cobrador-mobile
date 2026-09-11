@@ -41,6 +41,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [offlineCount, setOfflineCount] = useState(getOfflineQueueCount());
   const [showAdvancedConnection, setShowAdvancedConnection] = useState(false);
+  const [operatorName, setOperatorName] = useState(config.operatorName || '');
+  const [whatsappMode, setWhatsappMode] = useState<'auto' | 'standard' | 'business'>(
+    config.whatsappMode || 'auto'
+  );
 
   useEffect(() => {
     setUrl(config.url || DEFAULT_URL);
@@ -48,6 +52,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setPixKey(config.pixKey || '');
     setNomeAssociacao(config.nomeAssociacao || 'Associação de Moradores');
     setOfflineCount(getOfflineQueueCount());
+    setOperatorName(config.operatorName || '');
+    setWhatsappMode(config.whatsappMode || 'auto');
   }, [config, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,6 +70,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         key: key.trim(),
         pixKey: pixKey.trim(),
         nomeAssociacao: nomeAssociacao.trim(),
+        operatorName: operatorName.trim(),
+        whatsappMode,
         isDemo: false
       });
       onClose();
@@ -154,6 +162,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           />
           <p className="text-[10px] text-amber-700 mt-1">Altere somente se uma nova implantação do Apps Script for criada.</p>
         </div>}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-bold text-[#68778a] uppercase tracking-wider mb-1">
+              Responsável pelas operações
+            </label>
+            <input
+              value={operatorName}
+              onChange={(e) => setOperatorName(e.target.value)}
+              placeholder="Ex: Valdir"
+              className="w-full bg-[#fbfdff] border border-[#cad5e1] rounded-xl p-3 text-xs text-[#172033] outline-none focus:border-[#1769aa]"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[#68778a] uppercase tracking-wider mb-1">
+              Aplicativo do WhatsApp
+            </label>
+            <select
+              value={whatsappMode}
+              onChange={(e) => setWhatsappMode(e.target.value as 'auto' | 'standard' | 'business')}
+              className="w-full bg-[#fbfdff] border border-[#cad5e1] rounded-xl p-3 text-xs text-[#172033] outline-none focus:border-[#1769aa]"
+            >
+              <option value="auto">Detectar automaticamente</option>
+              <option value="standard">WhatsApp comum</option>
+              <option value="business">WhatsApp Business</option>
+            </select>
+          </div>
+        </div>
 
         {/* Chave PIX */}
         <div>

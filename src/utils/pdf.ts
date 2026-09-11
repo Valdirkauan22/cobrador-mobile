@@ -10,12 +10,18 @@ interface ReceiptShareNativePlugin {
     fileName: string;
     phone: string;
     message: string;
+    whatsappMode?: 'auto' | 'standard' | 'business';
   }): Promise<{ opened: boolean }>;
 }
 
 const ReceiptShareNative = registerPlugin<ReceiptShareNativePlugin>('ReceiptShareNative');
 
-export function createPdfBlob(item: PagoItem, competencia: string, nomeAssociacao?: string): Blob {
+export function createPdfBlob(
+  item: PagoItem,
+  competencia: string,
+  nomeAssociacao?: string,
+  operatorName?: string
+): Blob {
   const clean = (s: string | undefined | null) =>
     String(s || '')
       .normalize('NFD')
@@ -26,6 +32,7 @@ export function createPdfBlob(item: PagoItem, competencia: string, nomeAssociaca
     ? `Morador: ${clean(item.morador)} (${clean(item.unidade)})`
     : `Morador: ${clean(item.morador)}`;
   const reciboNumero = `${String(competencia || '').replace(/\D/g, '')}-${clean(item.codigo)}-${String(item.data_pagamento || '').replace(/\D/g, '').slice(0, 8)}`;
+  const verificationCode = clean(reciboNumero).replace(/\s/g, '').toUpperCase();
 
   const lines = [
     'RECIBO DE CONTRIBUICAO',
@@ -40,6 +47,11 @@ export function createPdfBlob(item: PagoItem, competencia: string, nomeAssociaca
     'Forma: ' + clean(item.forma_pagamento),
     '',
     'Recebemos o valor acima referente a contribuicao da Associacao.',
+    operatorName ? 'Responsavel: ' + clean(operatorName) : 'Emitido eletronicamente pelo Cobrador Mobile',
+    'Codigo de verificacao: ' + verificationCode,
+    '',
+    '________________________________________',
+    'Associacao / Responsavel pelo recebimento',
     'Obrigado pela colaboracao.'
   ];
 
@@ -145,7 +157,7 @@ export function createMonthlyReportPdfBlob(
   }
 
   lines.push('------------------------------------------------------------');
-  lines.push('Relatorio gerado automaticamente pelo Cobrador Mobile v8.2');
+  lines.push('Relatorio gerado automaticamente pelo Cobrador Mobile v1.4.0');
 
   const content =
     'BT /F1 10 Tf 45 800 Td ' +
@@ -209,8 +221,8 @@ export function openWhatsApp(phone: string, message: string): void {
   window.open(url, '_blank');
 }
 
-export function downloadReceipt(item: PagoItem, competencia: string, nomeAssociacao?: string): void {
-  const blob = createPdfBlob(item, competencia, nomeAssociacao);
+export function downloadReceipt(item: PagoItem, competencia: string, nomeAssociacao?: string, operatorName?: string): void {
+  const blob = createPdfBlob(item, competencia, nomeAssociacao, operatorName);
   const fileName = `recibo_${item.codigo}_${(competencia || '').replace('/', '-')}.pdf`;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -226,9 +238,11 @@ export async function shareOrDownloadReceipt(
   item: PagoItem,
   competencia: string,
   onNotify: (msg: string) => void,
-  nomeAssociacao?: string
+  nomeAssociacao?: string,
+  operatorName?: string,
+  whatsappMode: 'auto' | 'standard' | 'business' = 'auto'
 ): Promise<void> {
-  const blob = createPdfBlob(item, competencia, nomeAssociacao);
+  const blob = createPdfBlob(item, competencia, nomeAssociacao, operatorName);
   const fileName = `recibo_${item.codigo}_${(competencia || '').replace('/', '-')}.pdf`;
   const message = `Olá ${item.morador}, segue o recibo de pagamento da contribuição referente a ${competencia}. Obrigado pela colaboração!`;
 
@@ -246,8 +260,10 @@ export async function shareOrDownloadReceipt(
         base64,
         fileName,
         phone: formatPhone(item.telefone),
-        message
+        message,
+        whatsappMode
       });
+      onNotify('Contato aberto com o recibo anexado. Confirme o envio no WhatsApp.');
       return;
     } catch (err: unknown) {
       if ((err as Error)?.message?.toLowerCase().includes('cancel')) return;
@@ -290,7 +306,7 @@ export async function shareOrDownloadReceipt(
   }
 
   // Fallback download and WhatsApp
-  downloadReceipt(item, competencia, nomeAssociacao);
+  downloadReceipt(item, competencia, nomeAssociacao, operatorName);
   openWhatsApp(item.telefone, message);
   onNotify('Recibo baixado. Anexe-o na conversa do WhatsApp.');
 }

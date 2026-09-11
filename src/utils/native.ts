@@ -2,6 +2,8 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { BiometricAuth, AndroidBiometryStrength } from '@aparajita/capacitor-biometric-auth';
 
+export const APP_VERSION = '1.4.0';
+
 export const isNativeApp = () => Capacitor.isNativePlatform();
 
 export async function hashPin(pin: string): Promise<string> {

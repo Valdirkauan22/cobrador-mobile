@@ -31,6 +31,7 @@ interface MaisViewProps {
   onCheckUpdate: () => void;
   monthClosed?: boolean;
   notificationsEnabled?: boolean;
+  appVersion?: string;
 }
 
 export const MaisView: React.FC<MaisViewProps> = ({
@@ -45,7 +46,7 @@ export const MaisView: React.FC<MaisViewProps> = ({
   onSyncOffline,
   isOnline = true,
   onSecurity, onNotifications, onRestore, onClosing, onCheckUpdate,
-  monthClosed = false, notificationsEnabled = false
+  monthClosed = false, notificationsEnabled = false, appVersion = ''
 }) => {
   return (
     <section id="mais-view" className="space-y-4 pb-24">
@@ -192,6 +193,11 @@ export const MaisView: React.FC<MaisViewProps> = ({
           </div>
         </button>
       </div>
+      {appVersion && (
+        <p className="text-center text-[10px] font-semibold text-slate-400">
+          Cobrador Mobile v{appVersion}
+        </p>
+      )}
     </section>
   );
 };

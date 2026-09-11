@@ -69,6 +69,8 @@ export interface AppConfig {
   biometricsEnabled?: boolean;
   notificationsEnabled?: boolean;
   lockTimeoutMinutes?: number;
+  operatorName?: string;
+  whatsappMode?: 'auto' | 'standard' | 'business';
 }
 
 export interface BackupItem {
