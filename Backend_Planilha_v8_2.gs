@@ -2,7 +2,7 @@ const FUSO = 'America/Sao_Paulo',
   ABA_MENSALIDADES = 'Mensalidades',
   ABA_HISTORICO = 'Histórico Cobranças',
   ABA_MORADORES = 'Moradores',
-  CACHE_CONSULTA = 'consulta_mes_atual_v8';
+  CACHE_CONSULTA = 'consulta_competencia_ativa_v8_2_1';
 
 function out(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
@@ -100,7 +100,7 @@ function doPost(e) {
 
 function health_() {
   let s = SpreadsheetApp.openById(planilhaId_());
-  return { ok: true, versao: '8.2', planilha: s.getName(), timestamp: dh(new Date()) };
+  return { ok: true, versao: '8.2.1', planilha: s.getName(), timestamp: dh(new Date()) };
 }
 
 function contextoAtual_() {
@@ -108,29 +108,67 @@ function contextoAtual_() {
   if (!s) throw Error('Aba Mensalidades não encontrada');
   let u = s.getLastRow();
   if (u < 4) return { ss: ss, sheet: s, dados: [] };
-  let atual = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM'), c = s.getRange(4, 2, u - 3, 1).getValues(), ini = -1, fim = -1;
-  c.forEach(function(r, i) {
-    if (ck(r[0]) === atual) {
-      if (ini < 0) ini = i + 4;
-      fim = i + 4;
-    }
+  let atual = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM');
+  let competencias = s.getRange(4, 2, u - 3, 1).getValues();
+  let blocos = {};
+
+  competencias.forEach(function(r, i) {
+    let k = ck(r[0]);
+    if (!k) return;
+    let linha = i + 4;
+    if (!blocos[k]) blocos[k] = { ini: linha, fim: linha };
+    blocos[k].fim = linha;
   });
-  // Se não encontrar linhas para o mês atual exato (ex: virada de mês ou testes), usa a última competência preenchida
-  if (ini < 0) {
-    let ultimaComp = '';
-    for (let i = c.length - 1; i >= 0; i--) {
-      let k = ck(c[i][0]);
-      if (k) { ultimaComp = k; break; }
-    }
-    if (ultimaComp) {
-      c.forEach(function(r, i) {
-        if (ck(r[0]) === ultimaComp) {
-          if (ini < 0) ini = i + 4;
-          fim = i + 4;
-        }
+
+  let escolhida = blocos[atual] ? atual : '';
+
+  // Quando o mês do calendário estiver totalmente quitado, avança para a
+  // primeira competência futura que tenha uma ação de cobrança disponível.
+  // Ex.: no fim de setembro, os lembretes de outubro passam a ser exibidos.
+  if (escolhida) {
+    let bAtual = blocos[escolhida];
+    let dadosAtual = s.getRange(bAtual.ini, 1, bAtual.fim - bAtual.ini + 1, 25).getValues();
+    let possuiPendente = dadosAtual.some(function(r) {
+      let morador = String(r[3] || '').trim();
+      let status = String(r[12] || '').trim().toUpperCase();
+      let saldo = Number(r[10] || 0);
+      return morador && status !== 'PAGO' && saldo > 0;
+    });
+
+    if (!possuiPendente) {
+      let acoes = s.getRange(4, 14, u - 3, 1).getDisplayValues();
+      let futurasComAcao = {};
+      competencias.forEach(function(r, i) {
+        let k = ck(r[0]);
+        if (k > atual && String(acoes[i][0] || '').trim()) futurasComAcao[k] = true;
       });
+      let futuras = Object.keys(futurasComAcao).sort();
+      if (futuras.length) escolhida = futuras[0];
     }
   }
+
+  // Em virada de mês ou base de testes, prioriza uma competência com ação
+  // disponível; se não houver, usa a última competência preenchida.
+  if (!escolhida) {
+    let acoes = s.getRange(4, 14, u - 3, 1).getDisplayValues();
+    let comAcao = {};
+    competencias.forEach(function(r, i) {
+      let k = ck(r[0]);
+      if (k && String(acoes[i][0] || '').trim()) comAcao[k] = true;
+    });
+    let candidatas = Object.keys(comAcao).sort();
+    if (candidatas.length) escolhida = candidatas[0];
+  }
+
+  if (!escolhida) {
+    for (let i = competencias.length - 1; i >= 0; i--) {
+      let k = ck(competencias[i][0]);
+      if (k) { escolhida = k; break; }
+    }
+  }
+
+  let ini = escolhida && blocos[escolhida] ? blocos[escolhida].ini : -1;
+  let fim = escolhida && blocos[escolhida] ? blocos[escolhida].fim : -1;
   if (ini < 0) return { ss: ss, sheet: s, dados: [] };
   let v = s.getRange(ini, 1, fim - ini + 1, 25).getValues();
   return { ss: ss, sheet: s, dados: v.map(function(r, i) { return { linha: ini + i, row: r }; }) };
