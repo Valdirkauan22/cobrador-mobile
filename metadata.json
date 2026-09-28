@@ -1,0 +1,6 @@
+{
+  "name": "Cobrador Mobile",
+  "description": "Gestão móvel de cobranças e controle de mensalidades da Associação de Moradores",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

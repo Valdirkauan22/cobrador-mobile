@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -101,10 +102,18 @@ async function startServer() {
     }
   });
 
+  const server = http.createServer(app);
+
   // Vite middleware in development vs static dist for production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: {
+          server,
+        },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -116,7 +125,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Cobrador Mobile server running on http://0.0.0.0:${PORT}`);
   });
 }
