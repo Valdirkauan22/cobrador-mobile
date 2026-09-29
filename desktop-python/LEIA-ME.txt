@@ -1,0 +1,25 @@
+COBRADOR DESKTOP 8.2.1 — WINDOWS
+
+Esta é a evolução do programa Python/Tkinter usado originalmente no computador.
+
+Principais recursos:
+- painel com moradores, pagos, pendentes e total em aberto;
+- perguntas: quem está devendo, quem pagou e resumo mensal;
+- cobrança individual e em lote pelo WhatsApp;
+- registro de pagamento, comprovante e recibo PDF;
+- envio orientado do recibo para o contato correto;
+- cadastro de moradores com unidade/endereço;
+- mensagens automáticas;
+- painel anual, PDF, Excel e backup;
+- competência selecionável, fechamento/reabertura e avanço mensal;
+- chave PIX, operador e nome da associação configuráveis;
+- senha, chave protegida, bandeja do Windows e inicialização automática.
+
+CONFIGURAÇÃO
+1. Abra o programa e clique em CONFIGURAÇÃO.
+2. A URL do Web App já vem preenchida.
+3. Informe somente a chave da API e salve.
+4. Use TESTAR CONEXÃO.
+
+GERAR O EXE NO WINDOWS
+Execute GERAR_EXE.bat. O resultado ficará em dist\Cobrador_Associacao_8.2.1.exe.
