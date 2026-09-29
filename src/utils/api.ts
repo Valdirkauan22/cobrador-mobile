@@ -38,6 +38,8 @@ interface DemoStore {
   pagos: PagoItem[];
   historico: Record<string, HistoricoItem[]>;
   templates: Templates;
+  fechado?: boolean;
+  historicoCompetencias?: Record<string, { pagos: PagoItem[]; pendentes: PendenteItem[]; fechado: boolean }>;
 }
 
 function getInitialDemoStore(): DemoStore {
@@ -240,7 +242,7 @@ export class CobradorApi {
     return callRemoteApi(this.cfg, 'health');
   }
 
-  async getDashboardData(): Promise<DashboardData> {
+  async getDashboardData(competencia?: string): Promise<DashboardData> {
     const parseVal = (val: unknown) => {
       if (typeof val === 'number') return isNaN(val) ? 0 : val;
       const str = String(val ?? '');
@@ -252,6 +254,10 @@ export class CobradorApi {
 
     if (this.isUsingDemo()) {
       const store = loadDemoStore();
+      const compAlvo = competencia || store.competencia;
+      const ehHistorico = !!(competencia && store.historicoCompetencias && store.historicoCompetencias[competencia]);
+      const histData = ehHistorico ? store.historicoCompetencias![competencia!] : null;
+
       const moradoresCadastrados = (store.moradores || []).filter(
         (m) => toStr(m.nome) !== '' && toStr(m.situacao) !== 'Inativo'
       );
@@ -269,7 +275,10 @@ export class CobradorApi {
         }
       });
 
-      const pendentesFiltrados = store.pendentes
+      const fontePendentes = histData ? histData.pendentes : store.pendentes;
+      const fontePagos = histData ? histData.pagos : store.pagos;
+
+      const pendentesFiltrados = fontePendentes
         .filter((p) => {
           const cod = toStr(p.codigo);
           const nome = toLower(p.morador);
@@ -286,7 +295,7 @@ export class CobradorApi {
           };
         });
 
-      const pagosFiltrados = store.pagos
+      const pagosFiltrados = fontePagos
         .filter((p) => {
           const cod = toStr(p.codigo);
           const nome = toLower(p.morador);
@@ -307,8 +316,10 @@ export class CobradorApi {
       const totalPendenteNum = pendentesFiltrados.reduce((acc, cur) => acc + parseVal(cur.saldo), 0);
       const totalPrevistoNum = totalPagoNum + totalPendenteNum;
 
+      const todasPagas = pagosFiltrados.length > 0 && pendentesFiltrados.length === 0;
+
       return {
-        competencia: toStr(store.competencia),
+        competencia: toStr(compAlvo),
         total_moradores: moradoresCadastrados.length,
         qtd_pagos: pagosFiltrados.length,
         qtd_pendentes: pendentesFiltrados.length,
@@ -317,12 +328,14 @@ export class CobradorApi {
         total_pendente: formatBRL(totalPendenteNum),
         pagos: pagosFiltrados,
         pendentes: pendentesFiltrados,
-        moradores: moradoresCadastrados
+        moradores: moradoresCadastrados,
+        fechado: histData ? histData.fechado : !!store.fechado,
+        todas_pagas: todasPagas
       };
     }
 
     const [c, m] = await Promise.all([
-      callRemoteApi(this.cfg, 'consulta'),
+      callRemoteApi(this.cfg, 'consulta', undefined, competencia ? { competencia } : undefined),
       callRemoteApi(this.cfg, 'moradores')
     ]);
 
@@ -423,6 +436,10 @@ export class CobradorApi {
     const totalPendenteNum = pendentesFiltrados.reduce((acc, cur) => acc + parseVal(cur.saldo), 0);
     const totalPrevistoNum = totalPagoNum + totalPendenteNum;
 
+    const todasPagas = (c.todas_pagas !== undefined)
+      ? !!c.todas_pagas
+      : (pagosFiltrados.length > 0 && pendentesFiltrados.length === 0);
+
     return {
       competencia: toStr(c.competencia),
       total_moradores: moradoresCadastrados.length > 0 ? moradoresCadastrados.length : (c.total_moradores || 0),
@@ -433,7 +450,9 @@ export class CobradorApi {
       total_pendente: formatBRL(totalPendenteNum),
       pagos: pagosFiltrados,
       pendentes: pendentesFiltrados,
-      moradores: moradoresCadastrados.length > 0 ? moradoresCadastrados : (m.moradores || [])
+      moradores: moradoresCadastrados.length > 0 ? moradoresCadastrados : (m.moradores || []),
+      fechado: !!c.fechado,
+      todas_pagas: todasPagas
     };
   }
 
@@ -665,13 +684,99 @@ export class CobradorApi {
   }
 
   async getClosingStatus(): Promise<ClosingStatus> {
-    if (this.isUsingDemo()) return { competencia: loadDemoStore().competencia, fechado: false };
+    if (this.isUsingDemo()) {
+      const s = loadDemoStore();
+      return { competencia: s.competencia, fechado: !!s.fechado };
+    }
     return callRemoteApi(this.cfg, 'fechamento');
   }
 
   async setMonthClosed(fechar: boolean): Promise<ClosingStatus> {
-    if (this.isUsingDemo()) return { competencia: loadDemoStore().competencia, fechado: fechar };
+    if (this.isUsingDemo()) {
+      const store = loadDemoStore();
+      store.fechado = fechar;
+      saveDemoStore(store);
+      return { competencia: store.competencia, fechado: fechar };
+    }
     return callRemoteApi(this.cfg, fechar ? 'fechar_mes' : 'reabrir_mes', {});
+  }
+
+  async avancarCompetencia(novaComp?: string): Promise<{ ok: boolean; competencia: string; mensagem: string }> {
+    if (this.isUsingDemo()) {
+      const store = loadDemoStore();
+      const compAtual = store.competencia || '09/2026';
+      const m = compAtual.match(/^(\d{1,2})\/(\d{4})$/);
+      let mes = m ? parseInt(m[1], 10) + 1 : 10;
+      let ano = m ? parseInt(m[2], 10) : 2026;
+      if (mes > 12) {
+        mes = 1;
+        ano++;
+      }
+      const proxComp = novaComp || `${String(mes).padStart(2, '0')}/${ano}`;
+
+      // Arquiva os dados da competência encerrada para consulta retroativa
+      if (!store.historicoCompetencias) store.historicoCompetencias = {};
+      store.historicoCompetencias[compAtual] = {
+        pagos: [...store.pagos],
+        pendentes: [...store.pendentes],
+        fechado: true
+      };
+
+      // Mapeia valores individuais devidos cobrados no mês anterior para herança
+      const mapaValores: Record<string, string> = {};
+      store.pagos.forEach(p => { if (p.codigo && p.valor_pago) mapaValores[p.codigo] = p.valor_pago; });
+      store.pendentes.forEach(p => { if (p.codigo && p.saldo) mapaValores[p.codigo] = p.saldo; });
+
+      // Inicia próxima competência com moradores ativos
+      const ativos = (store.moradores || []).filter(x => x.situacao !== 'Inativo');
+      store.competencia = proxComp;
+      store.fechado = false;
+      store.pagos = [];
+      store.pendentes = ativos.map((a, i) => {
+        const valCobrado = mapaValores[a.codigo] || 'R$ 150,00';
+        return {
+          linha: a.linha || (i + 4),
+          codigo: a.codigo,
+          morador: a.nome,
+          telefone: a.telefone,
+          saldo: valCobrado,
+          vencimento: `10/${proxComp}`,
+          unidade: a.unidade || `Casa ${a.codigo}`,
+          mensagem: `Olá ${a.nome}, a contribuição referente a ${proxComp} no valor de ${valCobrado} vencerá em 10/${proxComp}. Obrigado!`
+        };
+      });
+      saveDemoStore(store);
+
+      return {
+        ok: true,
+        competencia: proxComp,
+        mensagem: `Competência encerrada e avançada para ${proxComp}!`
+      };
+    }
+
+    return callRemoteApi(this.cfg, 'avancar_competencia', { competencia: novaComp });
+  }
+
+  async getCompetenciasDisponiveis(): Promise<string[]> {
+    if (this.isUsingDemo()) {
+      const store = loadDemoStore();
+      const set = new Set<string>();
+      if (store.competencia) set.add(store.competencia);
+      if (store.historicoCompetencias) {
+        Object.keys(store.historicoCompetencias).forEach((k) => set.add(k));
+      }
+      ['08/2026', '09/2026', '10/2026'].forEach((k) => set.add(k));
+      return Array.from(set).sort().reverse();
+    }
+    try {
+      const anual = await this.getAnual();
+      const comDados = (anual.meses || [])
+        .filter((m) => m.qtd_pagos > 0 || m.qtd_pendentes > 0)
+        .map((m) => m.competencia);
+      return Array.from(new Set(comDados)).reverse();
+    } catch {
+      return [];
+    }
   }
 
   async ativarBackup(): Promise<{ ok: boolean; mensagem: string }> {

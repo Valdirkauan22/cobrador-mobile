@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppConfig } from '../../types';
 import { DEFAULT_KEY, DEFAULT_URL, getOfflineQueueCount } from '../../utils/storage';
+import { applyTheme, ThemeMode } from '../../utils/theme';
 import { ModalWrapper } from './ModalWrapper';
 import {
   Building2,
@@ -8,9 +9,12 @@ import {
   HelpCircle,
   Key,
   Link as LinkIcon,
+  Moon,
   QrCode,
   RefreshCw,
+  Smartphone,
   Sparkles,
+  Sun,
   WifiOff
 } from 'lucide-react';
 
@@ -37,6 +41,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [nomeAssociacao, setNomeAssociacao] = useState(
     config.nomeAssociacao || 'Associação de Moradores'
   );
+  const [theme, setTheme] = useState<ThemeMode>(config.theme || 'system');
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [offlineCount, setOfflineCount] = useState(getOfflineQueueCount());
@@ -54,7 +59,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setOfflineCount(getOfflineQueueCount());
     setOperatorName(config.operatorName || '');
     setWhatsappMode(config.whatsappMode || 'auto');
+    setTheme(config.theme || 'system');
   }, [config, isOpen]);
+
+  const handleThemeChange = (newTheme: ThemeMode) => {
+    setTheme(newTheme);
+    applyTheme(newTheme);
+  };
+
+  const handleClose = () => {
+    // Revert preview if cancelled without saving
+    applyTheme(config.theme || 'system');
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +89,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         nomeAssociacao: nomeAssociacao.trim(),
         operatorName: operatorName.trim(),
         whatsappMode,
+        theme,
         isDemo: false
       });
       onClose();
@@ -99,7 +117,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <ModalWrapper isOpen={isOpen} onClose={onClose} title="Configurações do Cobrador">
+    <ModalWrapper isOpen={isOpen} onClose={handleClose} title="Configurações do Cobrador">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Offline items notice if any */}
         {offlineCount > 0 && (
@@ -123,6 +141,66 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
           </div>
         )}
+
+        {/* Seletor de Tema */}
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-[#68778a] uppercase tracking-wider">
+              Aparência e Tema
+            </label>
+            <span className="text-[10px] font-semibold text-slate-500">
+              {theme === 'system'
+                ? 'Automático (Sistema)'
+                : theme === 'dark'
+                ? 'Escuro fixado'
+                : 'Claro fixado'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              id="theme-btn-light"
+              onClick={() => handleThemeChange('light')}
+              className={`py-2.5 px-2 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                theme === 'light'
+                  ? 'bg-white text-[#1769aa] border-[#1769aa] shadow-xs ring-2 ring-[#1769aa]/20'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Sun className={`w-4 h-4 ${theme === 'light' ? 'text-amber-500' : 'text-slate-400'}`} />
+              <span>Claro</span>
+            </button>
+
+            <button
+              type="button"
+              id="theme-btn-dark"
+              onClick={() => handleThemeChange('dark')}
+              className={`py-2.5 px-2 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                theme === 'dark'
+                  ? 'bg-slate-900 text-white border-sky-400 shadow-xs ring-2 ring-sky-400/20'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Moon className={`w-4 h-4 ${theme === 'dark' ? 'text-sky-300' : 'text-slate-400'}`} />
+              <span>Escuro</span>
+            </button>
+
+            <button
+              type="button"
+              id="theme-btn-system"
+              onClick={() => handleThemeChange('system')}
+              className={`py-2.5 px-2 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                theme === 'system'
+                  ? 'bg-white text-[#1769aa] border-[#1769aa] shadow-xs ring-2 ring-[#1769aa]/20'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Smartphone className={`w-4 h-4 ${theme === 'system' ? 'text-emerald-500' : 'text-slate-400'}`} />
+              <span>Sistema</span>
+            </button>
+          </div>
+        </div>
 
         <div className="bg-[#e7f1fb] p-3 rounded-xl text-xs text-[#123b66] border border-[#bcd7f2] flex items-start gap-2.5">
           <HelpCircle className="w-5 h-5 shrink-0 text-[#1769aa] mt-0.5" />

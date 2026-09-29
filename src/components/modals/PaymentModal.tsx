@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { PendenteItem } from '../../types';
 import { ModalWrapper } from './ModalWrapper';
+import { openWhatsApp } from '../../utils/pdf';
+import { CheckCircle2, Share2 } from 'lucide-react';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -28,6 +30,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [file, setFile] = useState<File | undefined>(undefined);
   const [obs, setObs] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [successInfo, setSuccessInfo] = useState<{
+    morador: string;
+    telefone: string;
+    valor: string;
+    data: string;
+    forma: string;
+  } | null>(null);
 
   React.useEffect(() => {
     if (item) {
@@ -37,10 +46,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       setForma('PIX');
       setFile(undefined);
       setObs('');
+      setSuccessInfo(null);
     }
-  }, [item]);
+  }, [item, isOpen]);
 
   if (!item) return null;
+
+  const handleClose = () => {
+    setSuccessInfo(null);
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +77,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         file,
         observacao: obs
       });
-      onClose();
+      setSuccessInfo({
+        morador: item.morador,
+        telefone: item.telefone,
+        valor: numVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        data: formattedDate,
+        forma
+      });
     } catch (err: any) {
       alert(err.message || 'Erro ao registrar pagamento.');
     } finally {
@@ -70,8 +91,45 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   };
 
+  if (successInfo) {
+    const msg = `Olá ${successInfo.morador}! Confirmamos o recebimento da sua contribuição no valor de ${successInfo.valor}, realizada em ${successInfo.data} via ${successInfo.forma}. Muito obrigado pela colaboração com a Associação de Moradores!`;
+
+    return (
+      <ModalWrapper isOpen={isOpen} onClose={handleClose} title="Pagamento Confirmado">
+        <div className="text-center py-4 space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-100 shadow-xs">
+            <CheckCircle2 className="w-7 h-7" />
+          </div>
+          <div>
+            <h4 className="text-base font-black text-slate-800">Pagamento registrado com sucesso!</h4>
+            <p className="text-xs text-slate-600 mt-1">
+              <strong>{successInfo.morador}</strong> • {successInfo.valor} via {successInfo.forma}
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col gap-2">
+            <button
+              onClick={() => openWhatsApp(successInfo.telefone, msg)}
+              className="w-full bg-[#1e8e5a] hover:bg-[#167347] active:scale-95 text-white py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Enviar Recibo no WhatsApp do Morador</span>
+            </button>
+
+            <button
+              onClick={handleClose}
+              className="w-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 py-2.5 px-4 rounded-xl font-bold text-xs transition-all cursor-pointer"
+            >
+              Concluir
+            </button>
+          </div>
+        </div>
+      </ModalWrapper>
+    );
+  }
+
   return (
-    <ModalWrapper isOpen={isOpen} onClose={onClose} title="Registrar pagamento">
+    <ModalWrapper isOpen={isOpen} onClose={handleClose} title="Registrar pagamento">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-bold text-[#68778a] uppercase tracking-wider mb-1">

@@ -71,6 +71,7 @@ export interface AppConfig {
   lockTimeoutMinutes?: number;
   operatorName?: string;
   whatsappMode?: 'auto' | 'standard' | 'business';
+  theme?: 'light' | 'dark' | 'system';
 }
 
 export interface BackupItem {
@@ -105,6 +106,8 @@ export interface DashboardData {
   pagos: PagoItem[];
   pendentes: PendenteItem[];
   moradores: MoradorItem[];
+  fechado?: boolean;
+  todas_pagas?: boolean;
 }
 
 export interface ProofItem {

@@ -216,8 +216,10 @@ export function isValidPhone(phone: string): boolean {
 }
 
 export function openWhatsApp(phone: string, message: string): void {
-  const cleanPhone = formatPhone(phone);
-  const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  const clean = String(phone || '').replace(/\D/g, '');
+  const url = clean.length >= 8
+    ? `https://wa.me/${clean.startsWith('55') ? clean : '55' + clean}?text=${encodeURIComponent(message)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
   window.open(url, '_blank');
 }
 

@@ -1,13 +1,23 @@
 import React from 'react';
-import { Building2, Settings } from 'lucide-react';
+import { Building2, ChevronDown, Settings } from 'lucide-react';
 
 interface HeaderProps {
   competencia: string;
   isDemo?: boolean;
+  monthClosed?: boolean;
+  allPaid?: boolean;
   onOpenSettings: () => void;
+  onOpenCompetenciaModal?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ competencia, isDemo, onOpenSettings }) => {
+export const Header: React.FC<HeaderProps> = ({
+  competencia,
+  isDemo,
+  monthClosed,
+  allPaid,
+  onOpenSettings,
+  onOpenCompetenciaModal
+}) => {
   return (
     <header
       id="app-header"
@@ -35,9 +45,27 @@ export const Header: React.FC<HeaderProps> = ({ competencia, isDemo, onOpenSetti
               </span>
             )}
           </div>
-          <p id="competencia" className="text-[#cce2f7] text-[11px] font-medium leading-none mt-0.5">
-            {competencia ? `Competência ${competencia}` : 'Associação de Moradores'}
-          </p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <button
+              onClick={onOpenCompetenciaModal}
+              title="Clique para alternar competência"
+              className="inline-flex items-center gap-1 text-[#cce2f7] hover:text-white text-[11px] font-medium leading-none py-0.5 px-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <span id="competencia">
+                {competencia ? `Competência ${competencia}` : 'Associação de Moradores'}
+              </span>
+              <ChevronDown className="w-3 h-3 opacity-80" />
+            </button>
+            {monthClosed ? (
+              <span className="text-[9px] font-extrabold bg-rose-500/80 text-white px-1.5 py-0.5 rounded shadow-xs leading-none uppercase tracking-wider">
+                Fechado
+              </span>
+            ) : allPaid ? (
+              <span className="text-[9px] font-extrabold bg-emerald-500/80 text-white px-1.5 py-0.5 rounded shadow-xs leading-none uppercase tracking-wider">
+                100% Quitado
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
 

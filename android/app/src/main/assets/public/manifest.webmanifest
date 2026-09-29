@@ -1,0 +1,10 @@
+{
+  "name": "Cobrador Mobile",
+  "short_name": "Cobrador",
+  "description": "Gestão de mensalidades da Associação de Moradores",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef3f8",
+  "theme_color": "#1769aa",
+  "icons": [{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

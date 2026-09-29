@@ -47,11 +47,23 @@ function dh(v) {
 }
 
 function ct(v) {
-  return dv(v) ? Utilities.formatDate(v, FUSO, 'MM/yyyy') : String(v || '');
+  if (dv(v)) return Utilities.formatDate(v, FUSO, 'MM/yyyy');
+  let s = String(v || '').trim();
+  let y = s.match(/^(\d{4})-(\d{1,2})$/);
+  if (y) return (y[2].length === 1 ? '0' + y[2] : y[2]) + '/' + y[1];
+  let m = s.match(/^(\d{1,2})\/(\d{4})$/);
+  if (m) return (m[1].length === 1 ? '0' + m[1] : m[1]) + '/' + m[2];
+  return s;
 }
 
 function ck(v) {
-  return dv(v) ? Utilities.formatDate(v, FUSO, 'yyyy-MM') : String(v || '');
+  if (dv(v)) return Utilities.formatDate(v, FUSO, 'yyyy-MM');
+  let s = String(v || '').trim();
+  let m = s.match(/^(\d{1,2})\/(\d{4})$/);
+  if (m) return m[2] + '-' + (m[1].length === 1 ? '0' + m[1] : m[1]);
+  let y = s.match(/^(\d{4})-(\d{1,2})$/);
+  if (y) return y[1] + '-' + (y[2].length === 1 ? '0' + y[2] : y[2]);
+  return s;
 }
 
 function limpa() {
@@ -62,16 +74,16 @@ function doGet(e) {
   try {
     let p = e && e.parameter ? e.parameter : {};
     ok(p.chave);
-    if (p.acao === 'fila') return out(fila_());
-    if (p.acao === 'status') return out(status_());
-    if (p.acao === 'consulta') return out(consulta_());
+    if (p.acao === 'fila') return out(fila_(p.competencia));
+    if (p.acao === 'status') return out(status_(p.competencia));
+    if (p.acao === 'consulta') return out(consulta_(p.competencia));
     if (p.acao === 'historico') return out(historico_(p.codigo));
     if (p.acao === 'health') return out(health_());
     if (p.acao === 'moradores') return out(moradores_());
     if (p.acao === 'templates') return out(templates_());
     if (p.acao === 'anual') return out(anual_(p.ano));
     if (p.acao === 'backups') return out(backups_());
-    if (p.acao === 'fechamento') return out(fechamento_());
+    if (p.acao === 'fechamento') return out(fechamento_(p.competencia));
     throw Error('Ação inválida');
   } catch (x) {
     return out({ ok: false, erro: String(x.message || x) });
@@ -90,8 +102,9 @@ function doPost(e) {
     if (p.acao === 'backup') return out(backupAgora_());
     if (p.acao === 'ativar_backup') return out(ativarBackup_());
     if (p.acao === 'restaurar_backup') return out(restaurarBackup_(p));
-    if (p.acao === 'fechar_mes') return out(definirFechamento_(true));
-    if (p.acao === 'reabrir_mes') return out(definirFechamento_(false));
+    if (p.acao === 'fechar_mes') return out(definirFechamento_(true, p.competencia));
+    if (p.acao === 'reabrir_mes') return out(definirFechamento_(false, p.competencia));
+    if (p.acao === 'avancar_competencia' || p.acao === 'gerar_proxima_competencia') return out(gerarProximaCompetencia_(p));
     throw Error('Ação inválida');
   } catch (x) {
     return out({ ok: false, erro: String(x.message || x) });
@@ -100,14 +113,14 @@ function doPost(e) {
 
 function health_() {
   let s = SpreadsheetApp.openById(planilhaId_());
-  return { ok: true, versao: '8.2.1', planilha: s.getName(), timestamp: dh(new Date()) };
+  return { ok: true, versao: '8.2.2', planilha: s.getName(), timestamp: dh(new Date()) };
 }
 
-function contextoAtual_() {
+function contextoAtual_(compSolicitada) {
   let ss = SpreadsheetApp.openById(planilhaId_()), s = ss.getSheetByName(ABA_MENSALIDADES);
   if (!s) throw Error('Aba Mensalidades não encontrada');
   let u = s.getLastRow();
-  if (u < 4) return { ss: ss, sheet: s, dados: [] };
+  if (u < 4) return { ss: ss, sheet: s, dados: [], blocos: {}, competencia: '' };
   let atual = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM');
   let competencias = s.getRange(4, 2, u - 3, 1).getValues();
   let blocos = {};
@@ -120,35 +133,63 @@ function contextoAtual_() {
     blocos[k].fim = linha;
   });
 
-  let escolhida = blocos[atual] ? atual : '';
+  let prop = PropertiesService.getScriptProperties();
 
-  // Quando o mês do calendário estiver totalmente quitado, avança para a
-  // primeira competência futura que tenha uma ação de cobrança disponível.
-  // Ex.: no fim de setembro, os lembretes de outubro passam a ser exibidos.
+  // 1. Se foi solicitada uma competência específica pelo app (ex: consulta pontual)
+  let kSolicitada = compSolicitada ? ck(compSolicitada) : '';
+  let escolhida = kSolicitada && blocos[kSolicitada] ? kSolicitada : '';
+
+  // 2. Se não solicitada diretamente, tenta a competência do calendário atual
+  if (!escolhida) {
+    escolhida = blocos[atual] ? atual : '';
+  }
+
+  // 3. Quando o mês do calendário estiver 100% quitado (todos moradores ativos pagaram)
+  // ou estiver marcado como fechado nas propriedades, avança para a próxima competência!
   if (escolhida) {
     let bAtual = blocos[escolhida];
     let dadosAtual = s.getRange(bAtual.ini, 1, bAtual.fim - bAtual.ini + 1, 25).getValues();
+    let mapa = mapaMoradoresCadastrados_(ss);
+    let temFiltro = mapa.lista.length > 0;
+
     let possuiPendente = dadosAtual.some(function(r) {
+      let cod = String(r[2] || '').trim();
       let morador = String(r[3] || '').trim();
+      if (!morador) return false;
+      if (temFiltro) {
+        let cadastrado = (cod && mapa.codigos.has(cod)) || mapa.nomes.has(morador.toLowerCase());
+        if (!cadastrado) return false;
+      }
       let status = String(r[12] || '').trim().toUpperCase();
       let saldo = Number(r[10] || 0);
-      return morador && status !== 'PAGO' && saldo > 0;
+      return status !== 'PAGO' && saldo > 0;
     });
 
-    if (!possuiPendente) {
+    let mesFechado = prop.getProperty('MES_FECHADO_' + escolhida) === 'true';
+
+    if (!possuiPendente || mesFechado) {
+      let todasFuturas = Object.keys(blocos).filter(function(k) { return k > escolhida; }).sort();
+
+      // Procura primeiro se há competência futura com ação de cobrança já engatilhada (ex: lembretes de vencimento)
       let acoes = s.getRange(4, 14, u - 3, 1).getDisplayValues();
       let futurasComAcao = {};
       competencias.forEach(function(r, i) {
         let k = ck(r[0]);
-        if (k > atual && String(acoes[i][0] || '').trim()) futurasComAcao[k] = true;
+        if (k > escolhida && String(acoes[i][0] || '').trim()) futurasComAcao[k] = true;
       });
       let futuras = Object.keys(futurasComAcao).sort();
-      if (futuras.length) escolhida = futuras[0];
+
+      if (futuras.length) {
+        escolhida = futuras[0];
+      } else if (todasFuturas.length) {
+        // Se ainda não há ações ativas no próximo mês (ex: lembretes só disparam 5 dias antes),
+        // mas o próximo mês já está cadastrado na planilha, avança automaticamente para ele!
+        escolhida = todasFuturas[0];
+      }
     }
   }
 
-  // Em virada de mês ou base de testes, prioriza uma competência com ação
-  // disponível; se não houver, usa a última competência preenchida.
+  // 4. Em virada de mês ou base de testes, prioriza uma competência com ação disponível
   if (!escolhida) {
     let acoes = s.getRange(4, 14, u - 3, 1).getDisplayValues();
     let comAcao = {};
@@ -160,6 +201,7 @@ function contextoAtual_() {
     if (candidatas.length) escolhida = candidatas[0];
   }
 
+  // 5. Fallback para a última competência preenchida na planilha
   if (!escolhida) {
     for (let i = competencias.length - 1; i >= 0; i--) {
       let k = ck(competencias[i][0]);
@@ -169,9 +211,9 @@ function contextoAtual_() {
 
   let ini = escolhida && blocos[escolhida] ? blocos[escolhida].ini : -1;
   let fim = escolhida && blocos[escolhida] ? blocos[escolhida].fim : -1;
-  if (ini < 0) return { ss: ss, sheet: s, dados: [] };
+  if (ini < 0) return { ss: ss, sheet: s, dados: [], blocos: blocos, competencia: escolhida };
   let v = s.getRange(ini, 1, fim - ini + 1, 25).getValues();
-  return { ss: ss, sheet: s, dados: v.map(function(r, i) { return { linha: ini + i, row: r }; }) };
+  return { ss: ss, sheet: s, dados: v.map(function(r, i) { return { linha: ini + i, row: r }; }), blocos: blocos, competencia: escolhida };
 }
 
 function rank_(a) {
@@ -238,8 +280,8 @@ function mapaMoradoresCadastrados_(ss) {
   return mapa;
 }
 
-function fila_() {
-  let x = contextoAtual_(), hist = enviadosHoje(x.ss), f = [], ven = 0, lem = 0, total = 0, ag = new Date();
+function fila_(compOpcional) {
+  let x = contextoAtual_(compOpcional), hist = enviadosHoje(x.ss), f = [], ven = 0, lem = 0, total = 0, ag = new Date();
   let mapa = mapaMoradoresCadastrados_(x.ss);
   let temFiltroMoradores = mapa.lista.length > 0;
 
@@ -262,11 +304,11 @@ function fila_() {
     f.push({ linha: i.linha, codigo: r[2], morador: m, telefone: t, competencia: ct(r[1]), saldo: brl(saldo), acao: a, mensagem: mensagem_(r), prioridade: p });
   });
   f.sort(function(a, b) { return a.prioridade - b.prioridade || a.morador.localeCompare(b.morador, 'pt-BR'); });
-  return { ok: true, fila: f, qtd: f.length, vencidas: ven, lembretes: lem, total_aberto: brl(total) };
+  return { ok: true, fila: f, qtd: f.length, vencidas: ven, lembretes: lem, total_aberto: brl(total), competencia: x.competencia ? ct(x.competencia) : '' };
 }
 
-function status_() {
-  let r = fila_();
+function status_(compOpcional) {
+  let r = fila_(compOpcional);
   return { ok: true, qtd: r.qtd, vencidas: r.vencidas, lembretes: r.lembretes, total_aberto: r.total_aberto, assinatura: r.fila.map(function(x) { return x.linha + '-' + x.codigo + '-' + x.acao; }).join('|') };
 }
 
@@ -275,10 +317,11 @@ function forma_(v) {
   return ['PIX', 'DINHEIRO', 'TRANSFERENCIA', 'BOLETO', 'CARTAO', 'OUTRO'].indexOf(v.toUpperCase()) >= 0 ? v : '';
 }
 
-function consulta_() {
-  let cache = CacheService.getScriptCache(), g = cache.get(CACHE_CONSULTA);
+function consulta_(compOpcional) {
+  let cacheKey = compOpcional ? CACHE_CONSULTA + '_' + ck(compOpcional) : CACHE_CONSULTA;
+  let cache = CacheService.getScriptCache(), g = cache.get(cacheKey);
   if (g) return JSON.parse(g);
-  let x = contextoAtual_(), pg = [], pd = [], tp = 0, td = 0, prev = 0, comp = '';
+  let x = contextoAtual_(compOpcional), pg = [], pd = [], tp = 0, td = 0, prev = 0, comp = '';
   let mapa = mapaMoradoresCadastrados_(x.ss);
   let temFiltroMoradores = mapa.lista.length > 0;
 
@@ -313,8 +356,26 @@ function consulta_() {
   pg.sort(function(a, b) { return a.morador.localeCompare(b.morador, 'pt-BR'); });
   pd.sort(function(a, b) { return a.morador.localeCompare(b.morador, 'pt-BR'); });
   let totalCadastrados = temFiltroMoradores ? mapa.lista.length : (pg.length + pd.length);
-  let r = { ok: true, competencia: comp, total_moradores: totalCadastrados, qtd_pagos: pg.length, qtd_pendentes: pd.length, total_previsto: brl(prev), total_pago: brl(tp), total_pendente: brl(td), pagos: pg, pendentes: pd };
-  cache.put(CACHE_CONSULTA, JSON.stringify(r), 30);
+  comp = comp || (x.competencia ? ct(x.competencia) : '');
+  let chaveF = chaveFechamento_(x, x.competencia);
+  let mesFechado = PropertiesService.getScriptProperties().getProperty(chaveF) === 'true';
+  let todasPagas = pg.length > 0 && pd.length === 0;
+
+  let r = {
+    ok: true,
+    competencia: comp,
+    total_moradores: totalCadastrados,
+    qtd_pagos: pg.length,
+    qtd_pendentes: pd.length,
+    total_previsto: brl(prev),
+    total_pago: brl(tp),
+    total_pendente: brl(td),
+    pagos: pg,
+    pendentes: pd,
+    fechado: mesFechado,
+    todas_pagas: todasPagas
+  };
+  cache.put(cacheKey, JSON.stringify(r), 30);
   return r;
 }
 
@@ -502,25 +563,118 @@ function backupAgora_() {
   return { ok: true, nome: copia.getName(), url: copia.getUrl() };
 }
 
-function chaveFechamento_(x) {
-  let comp = x && x.dados && x.dados.length ? ck(x.dados[0].row[1]) : Utilities.formatDate(new Date(), FUSO, 'yyyy-MM');
+function chaveFechamento_(x, compOpcional) {
+  let comp = compOpcional ? ck(compOpcional) : (x && x.competencia ? x.competencia : (x && x.dados && x.dados.length ? ck(x.dados[0].row[1]) : Utilities.formatDate(new Date(), FUSO, 'yyyy-MM')));
   return 'MES_FECHADO_' + comp;
 }
 
 function garantirMesAberto_(x) {
-  if (PropertiesService.getScriptProperties().getProperty(chaveFechamento_(x)) === 'true') throw Error('Esta competência está fechada. Reabra o mês antes de alterar pagamentos.');
+  if (PropertiesService.getScriptProperties().getProperty(chaveFechamento_(x, x && x.competencia)) === 'true') throw Error('Esta competência está fechada. Reabra o mês antes de alterar pagamentos.');
 }
 
-function fechamento_() {
-  let x = contextoAtual_(), chave = chaveFechamento_(x), p = PropertiesService.getScriptProperties(), comp = x.dados.length ? ct(x.dados[0].row[1]) : '';
+function fechamento_(compOpcional) {
+  let x = contextoAtual_(compOpcional), chave = chaveFechamento_(x, compOpcional), p = PropertiesService.getScriptProperties(), comp = x.competencia ? ct(x.competencia) : (x.dados && x.dados.length ? ct(x.dados[0].row[1]) : '');
   return { ok: true, competencia: comp, fechado: p.getProperty(chave) === 'true', fechado_em: p.getProperty(chave + '_EM') || '' };
 }
 
-function definirFechamento_(fechar) {
-  let x = contextoAtual_(), chave = chaveFechamento_(x), p = PropertiesService.getScriptProperties();
+function definirFechamento_(fechar, compOpcional) {
+  let x = contextoAtual_(compOpcional), chave = chaveFechamento_(x, compOpcional), p = PropertiesService.getScriptProperties();
   if (fechar) p.setProperties((function(){ let o={}; o[chave]='true'; o[chave+'_EM']=dh(new Date()); return o; })());
   else { p.deleteProperty(chave); p.deleteProperty(chave + '_EM'); }
-  return fechamento_();
+  limpa();
+  return fechamento_(compOpcional);
+}
+
+function gerarProximaCompetencia_(p) {
+  let lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    let ss = SpreadsheetApp.openById(planilhaId_()), s = ss.getSheetByName(ABA_MENSALIDADES);
+    if (!s) throw Error('Aba Mensalidades não encontrada');
+    let x = contextoAtual_();
+
+    let compBase = (p && p.competencia) ? ck(p.competencia) : (x.competencia || Utilities.formatDate(new Date(), FUSO, 'yyyy-MM'));
+    let partes = compBase.split('-');
+    let ano = Number(partes[0]), mes = Number(partes[1]);
+    mes++;
+    if (mes > 12) { mes = 1; ano++; }
+    let proxKey = ano + '-' + (mes < 10 ? '0' : '') + mes;
+    let proxTexto = (mes < 10 ? '0' : '') + mes + '/' + ano;
+
+    // Fecha a competência anterior se solicitado ou por padrão
+    definirFechamento_(true, compBase);
+
+    // Se já existe na planilha, apenas avança para ela
+    if (x.blocos && x.blocos[proxKey]) {
+      limpa();
+      return { ok: true, mensagem: 'Competência avançada para ' + proxTexto, competencia: proxTexto };
+    }
+
+    // Se ainda não existe, cria as linhas na aba Mensalidades para todos moradores ativos
+    let mapa = mapaMoradoresCadastrados_(ss);
+    if (!mapa.lista.length) throw Error('Nenhum morador ativo encontrado na aba Moradores para iniciar a competência.');
+
+    let u = Math.max(4, s.getLastRow() + 1);
+    let linhasNovas = [];
+    let diaVencimento = 10;
+    let dataVenc = new Date(ano, mes - 1, diaVencimento);
+    let valorPadrao = 150.00;
+
+    // Herança inteligente: consulta o valor devido cobrado no mês anterior para cada morador
+    let mapaValoresAnteriores = {};
+    if (x.blocos && x.blocos[compBase]) {
+      let bAnt = x.blocos[compBase];
+      let dadosAnt = s.getRange(bAnt.ini, 1, bAnt.fim - bAnt.ini + 1, 8).getValues();
+      dadosAnt.forEach(function(r) {
+        let cod = String(r[2] || '').trim();
+        let val = Number(r[6] || 0);
+        if (cod && val > 0) mapaValoresAnteriores[cod] = val;
+      });
+    }
+
+    mapa.lista.forEach(function(m, idx) {
+      let lin = u + idx;
+      let formulaSaldo = '=G' + lin + '-J' + lin;
+      let formulaStatus = '=SE(K' + lin + '<=0;"PAGO";"PENDENTE")';
+      let valorDevido = mapaValoresAnteriores[m.codigo] || valorPadrao;
+      let row = [
+        lin - 3,
+        proxTexto,
+        m.codigo,
+        m.nome,
+        m.telefone,
+        dataVenc,
+        valorDevido,
+        0,
+        0,
+        0,
+        formulaSaldo,
+        '',
+        formulaStatus,
+        '',
+        '',
+        '',
+        0,
+        '',
+        '',
+        '',
+        '',
+        'AGUARDANDO',
+        '',
+        '',
+        ''
+      ];
+      linhasNovas.push(row);
+    });
+
+    s.getRange(u, 1, linhasNovas.length, 25).setValues(linhasNovas);
+    SpreadsheetApp.flush();
+    limpa();
+
+    return { ok: true, mensagem: 'Competência ' + proxTexto + ' iniciada com sucesso!', competencia: proxTexto };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function backups_() {

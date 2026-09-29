@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { BiometricAuth, AndroidBiometryStrength } from '@aparajita/capacitor-biometric-auth';
 
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.4.1';
 
 export const isNativeApp = () => Capacitor.isNativePlatform();
 

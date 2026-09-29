@@ -1,0 +1,12 @@
+{
+	"appId": "br.com.associacao.cobradormobile",
+	"appName": "Cobrador Mobile",
+	"webDir": "dist",
+	"plugins": {
+		"SystemBars": {
+			"insetsHandling": "css",
+			"style": "DARK",
+			"hidden": false
+		}
+	}
+}

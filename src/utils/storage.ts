@@ -20,13 +20,18 @@ export function loadConfig(): AppConfig {
         notificationsEnabled: false,
         lockTimeoutMinutes: 5,
         operatorName: '',
-        whatsappMode: 'auto'
+        whatsappMode: 'auto',
+        theme: 'system'
       };
     }
     const parsed = JSON.parse(raw);
     const url = parsed.url && parsed.url.trim() !== '' ? parsed.url.trim() : DEFAULT_URL;
     const key = parsed.key && parsed.key.trim() !== '' ? parsed.key.trim() : DEFAULT_KEY;
     const isDemo = parsed.isDemo === true && !parsed.url ? false : (parsed.isDemo ?? false);
+    const theme =
+      parsed.theme === 'light' || parsed.theme === 'dark' || parsed.theme === 'system'
+        ? parsed.theme
+        : 'system';
 
     return {
       url,
@@ -39,7 +44,8 @@ export function loadConfig(): AppConfig {
       notificationsEnabled: !!parsed.notificationsEnabled,
       lockTimeoutMinutes: Number(parsed.lockTimeoutMinutes || 5),
       operatorName: parsed.operatorName || '',
-      whatsappMode: parsed.whatsappMode || 'auto'
+      whatsappMode: parsed.whatsappMode || 'auto',
+      theme
     };
   } catch {
     return {
@@ -51,7 +57,8 @@ export function loadConfig(): AppConfig {
       notificationsEnabled: false,
       lockTimeoutMinutes: 5,
       operatorName: '',
-      whatsappMode: 'auto'
+      whatsappMode: 'auto',
+      theme: 'system'
     };
   }
 }

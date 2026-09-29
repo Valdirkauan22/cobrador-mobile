@@ -9,8 +9,14 @@ import {
   RefreshCw,
   Settings,
   Wifi,
-  WifiOff
-  ,ShieldCheck, BellRing, LockKeyhole, RotateCcw, Smartphone
+  WifiOff,
+  ShieldCheck,
+  BellRing,
+  LockKeyhole,
+  RotateCcw,
+  Smartphone,
+  CheckCircle2,
+  Share2
 } from 'lucide-react';
 
 interface MaisViewProps {
@@ -21,6 +27,7 @@ interface MaisViewProps {
   onExportCSV: () => void;
   onOpenSettings: () => void;
   onMonthlyReport?: () => void;
+  onClosingSummary?: () => void;
   offlineCount?: number;
   onSyncOffline?: () => void;
   isOnline?: boolean;
@@ -29,6 +36,9 @@ interface MaisViewProps {
   onRestore: () => void;
   onClosing: () => void;
   onCheckUpdate: () => void;
+  onAdvanceCompetence?: () => void;
+  competencia?: string;
+  allPaid?: boolean;
   monthClosed?: boolean;
   notificationsEnabled?: boolean;
   appVersion?: string;
@@ -42,11 +52,21 @@ export const MaisView: React.FC<MaisViewProps> = ({
   onExportCSV,
   onOpenSettings,
   onMonthlyReport,
+  onClosingSummary,
   offlineCount = 0,
   onSyncOffline,
   isOnline = true,
-  onSecurity, onNotifications, onRestore, onClosing, onCheckUpdate,
-  monthClosed = false, notificationsEnabled = false, appVersion = ''
+  onSecurity,
+  onNotifications,
+  onRestore,
+  onClosing,
+  onCheckUpdate,
+  onAdvanceCompetence,
+  competencia,
+  allPaid = false,
+  monthClosed = false,
+  notificationsEnabled = false,
+  appVersion = ''
 }) => {
   return (
     <section id="mais-view" className="space-y-4 pb-24">
@@ -84,11 +104,54 @@ export const MaisView: React.FC<MaisViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {onAdvanceCompetence && (
+          <button
+            id="btn-menu-advance-competence"
+            onClick={onAdvanceCompetence}
+            className={`border rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm transition-all cursor-pointer ${
+              allPaid ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200' : 'bg-white border-[#d6e0ea] hover:bg-slate-50'
+            }`}
+          >
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${allPaid ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700'}`}>
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <strong className={`block text-sm font-bold ${allPaid ? 'text-emerald-950' : 'text-[#172033]'}`}>
+                Avançar competência
+              </strong>
+              <span className={`text-xs ${allPaid ? 'text-emerald-800 font-medium' : 'text-[#68778a]'}`}>
+                {allPaid
+                  ? `${competencia || 'Setembro'} quitado! Iniciar próximo mês`
+                  : `Encerrar ${competencia || 'atual'} e iniciar próxima`}
+              </span>
+            </div>
+          </button>
+        )}
+        <button onClick={onClosing} className={`border rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm ${monthClosed?'bg-rose-50 border-rose-200':'bg-white border-[#d6e0ea]'}`}><div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><LockKeyhole className="w-5 h-5"/></div><div><strong className="block text-sm">{monthClosed?'Mês fechado':'Fechar competência'}</strong><span className="text-xs text-[#68778a]">{monthClosed?'Toque para reabrir':'Bloquear alterações após conferência'}</span></div></button>
         <button onClick={onSecurity} className="bg-white border border-[#d6e0ea] rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm"><div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center"><ShieldCheck className="w-5 h-5"/></div><div><strong className="block text-sm">Segurança e biometria</strong><span className="text-xs text-[#68778a]">PIN, biometria e bloqueio automático</span></div></button>
         <button onClick={onNotifications} className="bg-white border border-[#d6e0ea] rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm"><div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><BellRing className="w-5 h-5"/></div><div><strong className="block text-sm">Notificações {notificationsEnabled?'ativas':'desativadas'}</strong><span className="text-xs text-[#68778a]">Lembrete, vencimento e cobrança</span></div></button>
-        <button onClick={onClosing} className={`border rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm ${monthClosed?'bg-rose-50 border-rose-200':'bg-white border-[#d6e0ea]'}`}><div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><LockKeyhole className="w-5 h-5"/></div><div><strong className="block text-sm">{monthClosed?'Mês fechado':'Fechar competência'}</strong><span className="text-xs text-[#68778a]">{monthClosed?'Toque para reabrir':'Bloquear alterações após conferência'}</span></div></button>
         <button onClick={onRestore} className="bg-white border border-[#d6e0ea] rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm"><div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center"><RotateCcw className="w-5 h-5"/></div><div><strong className="block text-sm">Recuperar backup</strong><span className="text-xs text-[#68778a]">Criar uma cópia recuperada segura</span></div></button>
         <button onClick={onCheckUpdate} className="bg-white border border-[#d6e0ea] rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm"><div className="w-11 h-11 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center"><Smartphone className="w-5 h-5"/></div><div><strong className="block text-sm">Atualização do aplicativo</strong><span className="text-xs text-[#68778a]">Verificar uma nova versão</span></div></button>
+        {onClosingSummary && (
+          <button
+            id="btn-menu-closing-summary"
+            onClick={onClosingSummary}
+            className="bg-white hover:bg-slate-50 text-[#173a5e] border border-emerald-200 rounded-2xl p-4 min-h-[76px] text-left flex items-center gap-3.5 shadow-sm transition-all cursor-pointer ring-1 ring-emerald-100"
+          >
+            <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <Share2 className="w-5 h-5" />
+            </div>
+            <div>
+              <strong className="block text-sm font-bold text-[#172033]">
+                Resumo do Mês (WhatsApp)
+              </strong>
+              <span className="text-xs text-[#68778a]">
+                Balanço pronto para enviar à diretoria
+              </span>
+            </div>
+          </button>
+        )}
+
         {onMonthlyReport && (
           <button
             id="btn-menu-monthly-report"

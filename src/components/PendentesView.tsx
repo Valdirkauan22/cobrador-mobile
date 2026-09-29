@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PendenteItem } from '../types';
 import { openWhatsApp } from '../utils/pdf';
 import { getAvatarStyle, getInitials } from '../utils/avatar';
 import {
+  AlertTriangle,
+  ArrowRight,
   Calendar,
   CheckCircle2,
   Clock,
@@ -20,40 +22,92 @@ import {
 interface PendentesViewProps {
   items: PendenteItem[];
   pixKey?: string;
+  competencia?: string;
+  qtdPagos?: number;
+  monthClosed?: boolean;
   onRefresh: () => void;
   onPayment: (item: PendenteItem) => void;
   onHistory: (codigo: string, nome: string) => void;
   onMarkSent?: (item: PendenteItem) => void;
   onPostpone?: (item: PendenteItem) => void;
   onNotify?: (msg: string) => void;
+  onAdvanceCompetence?: () => void;
+  onGoToPagos?: () => void;
   isLoading?: boolean;
 }
 
 export const PendentesView: React.FC<PendentesViewProps> = ({
   items,
   pixKey,
+  competencia,
+  qtdPagos = 0,
+  monthClosed = false,
   onRefresh,
   onPayment,
   onHistory,
   onMarkSent,
   onPostpone,
   onNotify,
+  onAdvanceCompetence,
+  onGoToPagos,
   isLoading
 }) => {
   const [search, setSearch] = useState('');
   const [sentCodes, setSentCodes] = useState<Set<string>>(new Set());
   const [unitFilter, setUnitFilter] = useState('');
-  const [stateFilter, setStateFilter] = useState<'todos'|'nao_enviados'|'enviados'|'vencidos'>('todos');
+  const [stateFilter, setStateFilter] = useState<'todos'|'nao_enviados'|'enviados'|'vencidos'|'recorrentes'>('todos');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batch, setBatch] = useState<PendenteItem[]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
 
-  const isOverdue = (value: string) => {
+  const getDaysOverdue = (value: string): number => {
     const m = String(value || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    if (!m) return false;
+    if (!m) return 0;
     const end = new Date(Number(m[3]), Number(m[2])-1, Number(m[1]), 23, 59, 59);
-    return end.getTime() < Date.now();
+    const diff = Date.now() - end.getTime();
+    return diff > 0 ? Math.floor(diff / (1000 * 60 * 60 * 24)) : 0;
   };
+
+  const isOverdue = (value: string) => {
+    return getDaysOverdue(value) > 0;
+  };
+
+  const isRecorrente = (item: PendenteItem): boolean => {
+    // 1. Atraso há mais de 30 dias (meses anteriores)
+    if (getDaysOverdue(item.vencimento) >= 30) return true;
+
+    // 2. Prioridade 1 (2ª notificação no backend)
+    if (item.prioridade === 1) return true;
+
+    // 3. Menção a meses anteriores, segunda notificação ou débito acumulado
+    const msg = (item.mensagem || '').toLowerCase();
+    if (
+      msg.includes('2ª') ||
+      msg.includes('segunda') ||
+      msg.includes('meses') ||
+      msg.includes('anterior') ||
+      msg.includes('acumulad')
+    ) {
+      return true;
+    }
+
+    // 4. Vencimento em mês/ano anterior ao atual
+    const m = String(item.vencimento || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) {
+      const dueMonth = Number(m[2]);
+      const dueYear = Number(m[3]);
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      if (dueYear < currentYear || (dueYear === currentYear && dueMonth < currentMonth)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const recurrentCount = useMemo(() => items.filter(isRecorrente).length, [items]);
   const units = Array.from(new Set(items.map(x=>x.unidade).filter(Boolean) as string[])).sort();
 
   const filtered = items.filter((x) => {
@@ -65,7 +119,12 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
       (x.unidade || '').toLowerCase().includes(q)
     );
     const sent = sentCodes.has(x.codigo) || x.enviadoHoje;
-    const matchesState = stateFilter === 'todos' || (stateFilter === 'enviados' && sent) || (stateFilter === 'nao_enviados' && !sent) || (stateFilter === 'vencidos' && isOverdue(x.vencimento));
+    const matchesState =
+      stateFilter === 'todos' ||
+      (stateFilter === 'enviados' && sent) ||
+      (stateFilter === 'nao_enviados' && !sent) ||
+      (stateFilter === 'vencidos' && isOverdue(x.vencimento)) ||
+      (stateFilter === 'recorrentes' && isRecorrente(x));
     return matchesSearch && (!unitFilter || x.unidade === unitFilter) && matchesState;
   });
 
@@ -100,7 +159,27 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
 
   const toggle = (codigo: string) => setSelected(prev => { const n=new Set(prev); n.has(codigo)?n.delete(codigo):n.add(codigo); return n; });
   const startBatch = () => { const list=filtered.filter(x=>selected.has(x.codigo)); if(!list.length) return; setBatch(list); setBatchIndex(0); };
-  const sendBatchCurrent = () => { const item=batch[batchIndex]; if(!item)return; handleCharge(item); if(batchIndex<batch.length-1)setBatchIndex(batchIndex+1); else {setBatch([]);setSelected(new Set());onNotify?.('Lote concluído.');} };
+  const sendBatchCurrent = () => {
+    const item = batch[batchIndex];
+    if (!item) return;
+    handleCharge(item);
+    if (batchIndex < batch.length - 1) {
+      setBatchIndex(batchIndex + 1);
+    } else {
+      setBatch([]);
+      setSelected(new Set());
+      onNotify?.('Envio em lote concluído com sucesso!');
+    }
+  };
+  const skipBatchCurrent = () => {
+    if (batchIndex < batch.length - 1) {
+      setBatchIndex(batchIndex + 1);
+    } else {
+      setBatch([]);
+      setSelected(new Set());
+      onNotify?.('Lote finalizado.');
+    }
+  };
 
   return (
     <section id="pendentes-view" className="space-y-3 pb-24">
@@ -137,9 +216,63 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <select value={stateFilter} onChange={e=>setStateFilter(e.target.value as any)} className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"><option value="todos">Todos os pendentes</option><option value="nao_enviados">Ainda não enviados</option><option value="enviados">Já enviados</option><option value="vencidos">Vencidos</option></select>
-        <select value={unitFilter} onChange={e=>setUnitFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-semibold"><option value="">Todas as unidades</option>{units.map(u=><option key={u}>{u}</option>)}</select>
+        <select
+          value={stateFilter}
+          onChange={e=>setStateFilter(e.target.value as any)}
+          className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-[#1769aa]"
+        >
+          <option value="todos">Todos os pendentes ({items.length})</option>
+          <option value="recorrentes">⚠️ Meses anteriores ({recurrentCount})</option>
+          <option value="nao_enviados">Ainda não enviados</option>
+          <option value="enviados">Já enviados</option>
+          <option value="vencidos">Vencidos (geral)</option>
+        </select>
+        <select
+          value={unitFilter}
+          onChange={e=>setUnitFilter(e.target.value)}
+          className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-[#1769aa]"
+        >
+          <option value="">Todas as unidades</option>
+          {units.map(u=><option key={u}>{u}</option>)}
+        </select>
       </div>
+
+      {/* Botão de Destaque para Inadimplentes Crônicos de Meses Anteriores */}
+      {recurrentCount > 0 && (
+        <button
+          type="button"
+          id="btn-filter-recorrentes"
+          onClick={() => setStateFilter(stateFilter === 'recorrentes' ? 'todos' : 'recorrentes')}
+          className={`w-full text-left rounded-xl p-3 border transition-all flex items-center justify-between gap-2 shadow-xs cursor-pointer ${
+            stateFilter === 'recorrentes'
+              ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-400/20 text-rose-950'
+              : 'bg-amber-50 hover:bg-amber-100/70 border-amber-200 text-amber-950'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${stateFilter === 'recorrentes' ? 'bg-rose-200 text-rose-800' : 'bg-amber-200 text-amber-800'}`}>
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <strong className="block text-xs font-bold leading-tight">
+                {recurrentCount} {recurrentCount === 1 ? 'morador com pendências recorrentes' : 'moradores com pendências recorrentes'}
+              </strong>
+              <span className="block text-[11px] opacity-80 truncate">
+                {stateFilter === 'recorrentes'
+                  ? 'Exibindo apenas inadimplentes de meses anteriores (toque para ver todos)'
+                  : 'Débitos acumulados ou atraso superior a 30 dias detectados'}
+              </span>
+            </div>
+          </div>
+          <span className={`text-[11px] font-extrabold px-2.5 py-1.5 rounded-lg shrink-0 transition-colors ${
+            stateFilter === 'recorrentes'
+              ? 'bg-rose-600 text-white'
+              : 'bg-amber-600 text-white'
+          }`}>
+            {stateFilter === 'recorrentes' ? 'Filtrado ✓' : 'Ver Crônicos'}
+          </span>
+        </button>
+      )}
 
       {filtered.length>0 && <div className="bg-white border border-blue-100 rounded-xl p-2.5 flex items-center justify-between gap-2">
         <button onClick={()=>setSelected(selected.size===filtered.length?new Set():new Set(filtered.map(x=>x.codigo)))} className="text-xs font-bold text-[#1769aa]">{selected.size===filtered.length?'Desmarcar todos':'Selecionar visíveis'}</button>
@@ -183,14 +316,45 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
       {/* List */}
       <div id="listP" className="grid gap-3">
         {items.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center border border-slate-100 shadow-xs">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
-              <Sparkles className="w-6 h-6" />
+          <div className="bg-white rounded-2xl p-6 sm:p-8 text-center border border-slate-100 shadow-xs space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-xs border border-emerald-100">
+              <Sparkles className="w-7 h-7" />
             </div>
-            <h4 className="text-base font-bold text-slate-800">Tudo em dia!</h4>
-            <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-              Nenhuma cobrança em aberto encontrada para esta competência.
-            </p>
+            <div>
+              <h4 className="text-lg font-black text-slate-800 tracking-tight">
+                {qtdPagos > 0
+                  ? `Competência ${competencia || 'atual'} 100% quitada!`
+                  : 'Tudo em dia!'}
+              </h4>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1.5 max-w-md mx-auto leading-relaxed">
+                {qtdPagos > 0
+                  ? `Todos os ${qtdPagos} moradores cadastrados já realizaram o pagamento. Não há pendências para ${competencia || 'este mês'}.`
+                  : 'Nenhuma cobrança em aberto encontrada para esta competência.'}
+              </p>
+            </div>
+
+            {qtdPagos > 0 && onAdvanceCompetence && (
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                <button
+                  id="btn-advance-competence-empty"
+                  onClick={onAdvanceCompetence}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#1e8e5a] hover:bg-[#167347] active:scale-95 text-white font-bold text-xs sm:text-sm px-5 py-3 rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Encerrar {competencia || 'mês'} e Avançar Competência</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                {onGoToPagos && (
+                  <button
+                    onClick={onGoToPagos}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-semibold text-xs px-4 py-3 rounded-xl transition-all cursor-pointer"
+                  >
+                    Ver recebidos ({qtdPagos})
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ) : filtered.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center border border-slate-100 shadow-xs">
@@ -210,12 +374,18 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
             const isAlreadySent = sentCodes.has(x.codigo) || x.enviadoHoje;
             const initials = getInitials(x.morador);
             const avatarColor = getAvatarStyle(x.morador);
+            const isChronic = isRecorrente(x);
+            const daysOver = getDaysOverdue(x.vencimento);
 
             return (
               <article
                 key={x.codigo + '-' + (x.linha || '')}
                 id={`person-pendente-${x.codigo}`}
-                className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-xs transition-all hover:shadow-sm"
+                className={`bg-white rounded-2xl p-4 border transition-all hover:shadow-sm ${
+                  isChronic
+                    ? 'border-rose-300 ring-1 ring-rose-300/40 bg-rose-50/20'
+                    : 'border-slate-100/90'
+                }`}
                 style={{ boxShadow: '0 4px 16px rgba(18, 43, 73, 0.05)' }}
               >
                 <label className="float-left mr-2 mt-1"><input type="checkbox" checked={selected.has(x.codigo)} onChange={()=>toggle(x.codigo)} className="w-4 h-4 accent-[#1769aa]" aria-label={`Selecionar ${x.morador}`} /></label>
@@ -246,9 +416,9 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
                           <Phone className="w-3 h-3 text-slate-400" />
                           {x.telefone}
                         </span>
-                        <span className="inline-flex items-center gap-1 font-medium text-slate-600">
-                          <Calendar className="w-3 h-3 text-slate-400" />
-                          Vence {x.vencimento}
+                        <span className={`inline-flex items-center gap-1 font-medium ${isChronic ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
+                          <Calendar className={`w-3 h-3 ${isChronic ? 'text-rose-500' : 'text-slate-400'}`} />
+                          Vence {x.vencimento} {daysOver >= 30 ? `(${daysOver} dias atrás)` : ''}
                         </span>
                       </div>
                     </div>
@@ -258,6 +428,12 @@ export const PendentesView: React.FC<PendentesViewProps> = ({
                     <span className="text-[11px] bg-slate-100 text-slate-600 font-mono font-bold px-2 py-0.5 rounded-md">
                       #{x.codigo}
                     </span>
+                    {isChronic && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full shrink-0">
+                        <AlertTriangle className="w-3 h-3 text-rose-600" />
+                        Crônico {daysOver >= 30 ? `(+${daysOver}d)` : ''}
+                      </span>
+                    )}
                     {isAlreadySent && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />

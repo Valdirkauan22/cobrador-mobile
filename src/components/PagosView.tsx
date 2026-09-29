@@ -37,6 +37,21 @@ export const PagosView: React.FC<PagosViewProps> = ({
   const units = Array.from(new Set(items.map(x=>x.unidade).filter(Boolean) as string[])).sort();
   const methods = Array.from(new Set(items.map(x=>x.forma_pagamento).filter(Boolean))).sort();
 
+  const parseVal = (val: string) => {
+    return parseFloat(String(val || '').replace(/[^\d,-]/g, '').replace('.', '').replace(',', '.')) || 0;
+  };
+
+  const methodTotals = React.useMemo(() => {
+    const acc: Record<string, { total: number; count: number }> = {};
+    items.forEach((it) => {
+      const m = it.forma_pagamento || 'Outro';
+      if (!acc[m]) acc[m] = { total: 0, count: 0 };
+      acc[m].total += parseVal(it.valor_pago);
+      acc[m].count += 1;
+    });
+    return acc;
+  }, [items]);
+
   const filtered = items.filter((x) => {
     const q = search.toLowerCase().trim();
     const matchesSearch = !q || (
@@ -50,6 +65,44 @@ export const PagosView: React.FC<PagosViewProps> = ({
 
   return (
     <section id="pagos-view" className="space-y-3 pb-24">
+      {/* Payment Method Totals Chips */}
+      {Object.keys(methodTotals).length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <button
+            onClick={() => setMethodFilter('')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer border ${
+              methodFilter === ''
+                ? 'bg-[#1769aa] text-white border-[#1769aa] shadow-xs'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Todas ({items.length})
+          </button>
+          {Object.entries(methodTotals).map(([m, data]) => {
+            const isSelected = methodFilter === m;
+            return (
+              <button
+                key={m}
+                onClick={() => setMethodFilter(isSelected ? '' : m)}
+                className={`px-3 py-1.5 rounded-xl text-xs shrink-0 transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-[#1769aa] text-white border-[#1769aa] shadow-xs font-bold'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 font-medium'
+                }`}
+              >
+                <span>{m}:</span>
+                <strong className={isSelected ? 'text-white' : 'text-slate-900'}>
+                  {data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </strong>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  {data.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex gap-2">
         <div className="relative flex-1">

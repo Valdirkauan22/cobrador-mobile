@@ -35,8 +35,11 @@ import { TemplatesModal } from './components/modals/TemplatesModal';
 import { AnnualModal } from './components/modals/AnnualModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { SecurityModal } from './components/modals/SecurityModal';
+import { CompetenciaModal } from './components/modals/CompetenciaModal';
+import { ClosingSummaryModal } from './components/modals/ClosingSummaryModal';
 import { LockScreen } from './components/LockScreen';
 import { configureBillingNotifications, checkLatestRelease, APP_VERSION } from './utils/native';
+import { applyTheme, setupSystemThemeListener } from './utils/theme';
 import { App as CapacitorApp } from '@capacitor/app';
 
 export const App: React.FC = () => {
@@ -83,6 +86,10 @@ export const App: React.FC = () => {
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(() => !!loadConfig().pinHash);
   const [monthClosed, setMonthClosed] = useState(false);
+  const [selectedCompetencia, setSelectedCompetencia] = useState<string>('');
+  const [availableCompetencias, setAvailableCompetencias] = useState<string[]>([]);
+  const [isCompetenciaModalOpen, setIsCompetenciaModalOpen] = useState(false);
+  const [isClosingSummaryOpen, setIsClosingSummaryOpen] = useState(false);
   const backgroundAt = React.useRef<number | null>(null);
 
   const api = useMemo(() => new CobradorApi(config), [config]);
@@ -100,18 +107,24 @@ export const App: React.FC = () => {
     }, 2800);
   }, []);
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (compOpcional?: string) => {
     setIsLoading(true);
     try {
-      const data = await api.getDashboardData();
+      const compAlvo = compOpcional !== undefined ? compOpcional : selectedCompetencia;
+      const [data, comps] = await Promise.all([
+        api.getDashboardData(compAlvo || undefined),
+        api.getCompetenciasDisponiveis()
+      ]);
       setDashboard(data);
+      if (comps.length > 0) setAvailableCompetencias(comps);
+      setMonthClosed(!!data.fechado);
       setOfflineCount(getOfflineQueueCount());
     } catch (err: any) {
       showToast('Erro ao sincronizar: ' + (err.message || 'Verifique a conexão'));
     } finally {
       setIsLoading(false);
     }
-  }, [api, showToast]);
+  }, [api, selectedCompetencia, showToast]);
 
   // Offline queue processor
   const processOfflineQueue = useCallback(async () => {
@@ -185,10 +198,21 @@ export const App: React.FC = () => {
     if (!api.isUsingDemo()) api.getClosingStatus().then(x => setMonthClosed(x.fechado)).catch(()=>{});
   }, [api, dashboard.competencia]);
 
+  useEffect(() => {
+    applyTheme(config.theme || 'system');
+    const unsubscribe = setupSystemThemeListener(() => {
+      if (config.theme === 'system' || !config.theme) {
+        applyTheme('system');
+      }
+    });
+    return unsubscribe;
+  }, [config.theme]);
+
   // Handle Save Settings
   const handleSaveSettings = async (newCfg: AppConfig) => {
     saveConfig(newCfg);
     setConfig(newCfg);
+    applyTheme(newCfg.theme || 'system');
     if (!newCfg.isDemo && newCfg.url) {
       const testApi = new CobradorApi(newCfg);
       const h = await testApi.health();
@@ -485,6 +509,35 @@ export const App: React.FC = () => {
     catch (e:any) { alert((e.message || e) + '\n\nAtualize também o Backend_Planilha_v8_2.gs para utilizar esta função.'); }
   };
 
+  const allPaid = useMemo(() => {
+    return dashboard.qtd_pendentes === 0 && dashboard.qtd_pagos > 0;
+  }, [dashboard.qtd_pendentes, dashboard.qtd_pagos]);
+
+  const handleAdvanceCompetence = async () => {
+    const compAtual = dashboard.competencia || 'Setembro';
+    const msg = `Deseja encerrar a competência ${compAtual} e avançar para o próximo mês?`;
+    if (!window.confirm(msg)) return;
+    try {
+      setIsLoading(true);
+      const res = await api.avancarCompetencia();
+      showToast(res.mensagem || 'Competência avançada com sucesso!');
+      setSelectedCompetencia(res.competencia || '');
+      await refreshAll(res.competencia || '');
+      // Abre o resumo para conferência e envio imediato no WhatsApp
+      setIsClosingSummaryOpen(true);
+    } catch (err: any) {
+      alert((err.message || 'Falha ao avançar competência.') + '\n\nCertifique-se de atualizar o código do Backend_Planilha_v8_2.gs no Google Apps Script.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectCompetencia = async (comp: string) => {
+    setSelectedCompetencia(comp);
+    await refreshAll(comp);
+    showToast(`Competência ${comp} carregada.`);
+  };
+
   const handleRestore = async () => {
     try {
       const backups = await api.getBackups();
@@ -508,7 +561,10 @@ export const App: React.FC = () => {
       <Header
         competencia={dashboard.competencia}
         isDemo={api.isUsingDemo()}
+        monthClosed={monthClosed}
+        allPaid={allPaid}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenCompetenciaModal={() => setIsCompetenciaModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -529,6 +585,9 @@ export const App: React.FC = () => {
           <PendentesView
             items={dashboard.pendentes}
             pixKey={config.pixKey}
+            competencia={dashboard.competencia}
+            qtdPagos={dashboard.qtd_pagos}
+            monthClosed={monthClosed}
             onRefresh={refreshAll}
             onPayment={(item) => setPaymentItem(item)}
             onHistory={(codigo, nome) =>
@@ -537,6 +596,8 @@ export const App: React.FC = () => {
             onMarkSent={handleMarkSent}
             onPostpone={handlePostpone}
             onNotify={showToast}
+            onAdvanceCompetence={handleAdvanceCompetence}
+            onGoToPagos={() => setCurrentTab('pagos')}
             isLoading={isLoading}
           />
         )}
@@ -585,6 +646,10 @@ export const App: React.FC = () => {
             onRestore={handleRestore}
             onClosing={handleClosing}
             onCheckUpdate={handleCheckUpdate}
+            onAdvanceCompetence={handleAdvanceCompetence}
+            onClosingSummary={() => setIsClosingSummaryOpen(true)}
+            competencia={dashboard.competencia}
+            allPaid={allPaid}
             monthClosed={monthClosed}
             notificationsEnabled={!!config.notificationsEnabled}
             appVersion={APP_VERSION}
@@ -655,6 +720,23 @@ export const App: React.FC = () => {
         isOpen={isAnnualOpen}
         onClose={() => setIsAnnualOpen(false)}
         fetchAnnualData={(ano) => api.getPainelAnual(ano)}
+      />
+
+      <CompetenciaModal
+        isOpen={isCompetenciaModalOpen}
+        currentCompetencia={dashboard.competencia}
+        availableCompetencias={availableCompetencias}
+        onSelectCompetencia={handleSelectCompetencia}
+        onAdvanceCompetence={handleAdvanceCompetence}
+        onClose={() => setIsCompetenciaModalOpen(false)}
+      />
+
+      <ClosingSummaryModal
+        isOpen={isClosingSummaryOpen}
+        onClose={() => setIsClosingSummaryOpen(false)}
+        dashboard={dashboard}
+        nomeAssociacao={config.nomeAssociacao}
+        onDownloadMonthlyReport={handleMonthlyReport}
       />
 
       <SettingsModal
